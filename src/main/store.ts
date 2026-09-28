@@ -24,6 +24,8 @@ export class MonitorStore {
       !value.notificationKeys
     )
       throw new Error('Monitor database format is not supported. Your data has been preserved.');
+    // Older releases seeded only 20 tasks once. Admission is now continuous.
+    delete value.initialized;
     return value as MonitorState;
   }
   write(state: MonitorState) {

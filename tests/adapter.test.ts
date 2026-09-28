@@ -30,6 +30,27 @@ test('catalog only reads source metadata and does not infer runtime from recency
     rmSync(home, { recursive: true });
   }
 });
+test('catalog discovery includes every nonarchived task beyond the old 200-task window', () => {
+  const home = mkdtempSync('/tmp/monitor-cat-');
+  try {
+    catalog(home);
+    const db = new DatabaseSync(join(home, 'state_5.sqlite'));
+    const insert = db.prepare("INSERT INTO threads VALUES(?,?,'/work/project','cli',0,?)");
+    for (let i = 0; i < 250; i++) insert.run(`task-${i}`, `Task ${i}`, i);
+    db.exec("INSERT INTO threads VALUES('archived','Archived','/work/project','cli',1,1000)");
+    db.close();
+    const sessions = readCatalog(home);
+    assert.equal(sessions.length, 251);
+    assert.ok(sessions.some((s) => s.externalId === 'task-0'));
+    assert.ok(!sessions.some((s) => s.externalId === 'archived'));
+    assert.equal(
+      readCatalog(home, ['archived']).find((s) => s.externalId === 'archived')?.archived,
+      true,
+    );
+  } finally {
+    rmSync(home, { recursive: true });
+  }
+});
 test('desktop observer follows, applies ordered patches, resyncs gaps and never claims ownership', async (t) => {
   const home = mkdtempSync('/tmp/monitor-ipc-');
   mkdirSync(join(home, 'ipc'), { mode: 0o700 });

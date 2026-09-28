@@ -27,7 +27,7 @@ export function readCatalog(home: string, tracked: string[] = []): Session[] {
     const projection = `id, title, cwd, source, archived, updated_at${columns.has('name') ? ', name' : ''}${columns.has('updated_at_ms') ? ', updated_at_ms' : ''}`;
     const rows = db
       .prepare(
-        `SELECT ${projection} FROM threads WHERE archived=0 ORDER BY updated_at DESC LIMIT 200`,
+        `SELECT ${projection} FROM threads WHERE archived=0 ORDER BY updated_at DESC, id ASC`,
       )
       .all();
     const byId = new Map(rows.map((row) => [String(row.id), row]));

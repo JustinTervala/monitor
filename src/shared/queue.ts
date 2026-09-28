@@ -10,7 +10,6 @@ export const sectionLabels: Record<QueueSection, string> = {
 };
 export const emptyState = (): MonitorState => ({
   version: 1,
-  initialized: false,
   sessions: {},
   groups: [],
   notifications: true,
@@ -111,15 +110,6 @@ export function applyCommand(
       break;
     case 'unsnooze':
       find(command.groupId).snooze = null;
-      break;
-    case 'remove':
-      find(command.groupId);
-      next.groups = next.groups.filter((g) => g.id !== command.groupId);
-      break;
-    case 'track':
-      if (!next.sessions[command.sessionId]) throw new Error('Session not found.');
-      if (!next.groups.some((g) => g.sessionIds.includes(command.sessionId)))
-        next.groups.push(newGroup(command.sessionId));
       break;
     case 'detach': {
       const g = find(command.groupId);

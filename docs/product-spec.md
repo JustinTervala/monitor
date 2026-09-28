@@ -10,6 +10,8 @@ Monitor helps the user schedule attention while preserving the existing harnesse
 
 ## Groups and the queue
 
+All non-archived tasks discovered from the source apps appear automatically, both on startup and as new tasks are created. No manual import or Add Task control is needed. Existing memberships, group names, snoozes, and priority remain unchanged; newly discovered tasks append to the global order. Previously unimported tasks from older Monitor versions are included on the next discovery pass. Existing group members remain organized even if later archived in the source app.
+
 Every task belongs to one queue entry. A standalone task appears as a single-task entry. Dragging one task onto another starts group creation and asks for a manually created name. A named group can contain sessions from both harnesses.
 
 Each group appears exactly once in the queue, as a single row. Selecting the row reveals its individual sessions and their observed states in a detail view. Group membership never causes tasks to be duplicated across queue sections.
@@ -90,7 +92,7 @@ Snoozing controls Monitor's notifications. Managing duplicate notifications from
 ## Editing and later work
 
 - Implemented: rename groups and override or clear project tags.
-- Implemented: merge groups, detach members, and remove entries from Monitor without source deletion.
+- Implemented: merge groups and detach members. Use group snoozing to defer work; there is no manual tracking or removal toggle.
 - Archive completed workstreams without deleting their source sessions.
 - Improve keyboard access, drag affordances, and detail-pane layout.
 - Attach handoff documents and PR references.

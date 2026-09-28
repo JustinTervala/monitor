@@ -11,9 +11,7 @@ import {
 import type { Command, Session, Snapshot, TaskGroup } from '../shared/types';
 
 type Editor =
-  | { kind: 'rename'; group: TaskGroup }
-  | { kind: 'merge'; source: TaskGroup; target: TaskGroup }
-  | { kind: 'add' };
+  { kind: 'rename'; group: TaskGroup } | { kind: 'merge'; source: TaskGroup; target: TaskGroup };
 const statusLabel = {
   review: 'Needs review',
   running: 'Running',
@@ -113,9 +111,6 @@ export function App() {
   const selectedGroup = state.groups.find((g) => g.id === selected);
   const selectedIndex = state.groups.findIndex((g) => g.id === selected);
   const tracked = new Set(state.groups.flatMap((g) => g.sessionIds));
-  const available = Object.values(state.sessions)
-    .filter((s) => !tracked.has(s.id) && !s.archived)
-    .sort((a, b) => b.updatedAt - a.updatedAt);
   const matches = (g: TaskGroup) =>
     `${groupName(state, g)} ${projectTag(state, g)} ${groupSessions(state, g)
       .map((s) => s.title)
@@ -230,9 +225,6 @@ export function App() {
             {runningCount} running
           </p>
         </div>
-        <button className="primary" onClick={() => setEditor({ kind: 'add' })}>
-          ＋ Add tasks
-        </button>
       </header>
       <div className="toolbar">
         <label className="search">
@@ -317,9 +309,8 @@ export function App() {
           )}
           {!state.groups.length && (
             <div className="empty-queue">
-              <h2>Bring your work into view.</h2>
-              <p>Add existing Codex tasks to start organizing your queue.</p>
-              <button onClick={() => setEditor({ kind: 'add' })}>Browse tasks</button>
+              <h2>Your tasks appear automatically.</h2>
+              <p>Open Codex and start a task. It will appear here on the next refresh.</p>
             </div>
           )}
         </main>
@@ -449,16 +440,6 @@ export function App() {
               Task states and read receipts come from the source app. An unavailable task may need
               to be opened there before it exposes live state.
             </p>
-            <button
-              className="remove-button"
-              onClick={() => {
-                void command({ type: 'remove', groupId: selectedGroup.id }).then((ok) => {
-                  if (ok) setSelected(null);
-                });
-              }}
-            >
-              Remove from Monitor
-            </button>
           </aside>
         )}
       </div>
@@ -484,7 +465,6 @@ export function App() {
         <EditorDialog
           editor={editor}
           snapshot={snapshot}
-          available={available}
           close={() => setEditor(null)}
           command={command}
           select={setSelected}
@@ -497,30 +477,23 @@ export function App() {
 function EditorDialog({
   editor,
   snapshot,
-  available,
   close,
   command,
   select,
 }: {
   editor: Editor;
   snapshot: Snapshot;
-  available: Session[];
   close: () => void;
   command: (c: Command) => Promise<boolean>;
   select: (id: string) => void;
 }) {
   const { state } = snapshot;
   const [name, setName] = useState(
-    editor.kind === 'rename'
-      ? groupName(state, editor.group)
-      : editor.kind === 'merge'
-        ? editor.target.name || ''
-        : '',
+    editor.kind === 'rename' ? groupName(state, editor.group) : editor.target.name || '',
   );
   const [project, setProject] = useState(
     editor.kind === 'rename' ? editor.group.projectOverride || '' : '',
   );
-  const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState('');
   const dialog = useRef<HTMLDialogElement>(null);
@@ -529,7 +502,7 @@ function EditorDialog({
   }, []);
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!name.trim() || editor.kind === 'add') return;
+    if (!name.trim()) return;
     setBusy(true);
     const value: Command =
       editor.kind === 'merge'
@@ -547,91 +520,52 @@ function EditorDialog({
   return (
     <dialog ref={dialog} onCancel={close} className="editor-dialog">
       <div className="dialog-top">
-        <span className="eyebrow">
-          {editor.kind === 'add' ? 'EXISTING CODEX SESSIONS' : 'WORKSTREAM'}
-        </span>
+        <span className="eyebrow">WORKSTREAM</span>
         <button className="icon-button" onClick={close} aria-label="Close dialog">
           ×
         </button>
       </div>
-      <h2>
-        {editor.kind === 'add'
-          ? 'Add to your queue'
-          : editor.kind === 'merge'
-            ? 'Name this workstream'
-            : 'Edit workstream'}
-      </h2>
-      {editor.kind === 'add' ? (
-        <>
-          <p>Start with existing tasks. Group them once they’re in your queue.</p>
+      <h2>{editor.kind === 'merge' ? 'Name this workstream' : 'Edit workstream'}</h2>
+      <form onSubmit={(event) => void submit(event)}>
+        {editor.kind === 'merge' && (
+          <p>
+            Combine “{groupName(state, editor.target)}” and “{groupName(state, editor.source)}”. The
+            group keeps the higher priority and the destination’s snooze setting.
+          </p>
+        )}
+        <label>
+          Group name
           <input
             autoFocus
-            aria-label="Search available tasks"
-            placeholder="Search tasks or directories…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            required
+            maxLength={120}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Billing rollout"
           />
-          <div className="available-list">
-            {available
-              .filter((s) =>
-                `${s.title} ${s.directory}`.toLowerCase().includes(query.toLowerCase()),
-              )
-              .map((s) => (
-                <div key={s.id}>
-                  <span>
-                    <strong>{s.title}</strong>
-                    <small>{s.directory || 'Project unknown'}</small>
-                  </span>
-                  <button onClick={() => void command({ type: 'track', sessionId: s.id })}>
-                    Add
-                  </button>
-                </div>
-              ))}
-            {!available.length && <p>All discovered tasks are already in your queue.</p>}
-          </div>
-        </>
-      ) : (
-        <form onSubmit={(event) => void submit(event)}>
-          {editor.kind === 'merge' && (
-            <p>
-              Combine “{groupName(state, editor.target)}” and “{groupName(state, editor.source)}”.
-              The group keeps the higher priority and the destination’s snooze setting.
-            </p>
-          )}
+        </label>
+        {editor.kind === 'rename' && (
           <label>
-            Group name
+            Project tag
             <input
-              autoFocus
-              required
-              maxLength={120}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Billing rollout"
+              maxLength={80}
+              value={project}
+              onChange={(e) => setProject(e.target.value)}
+              placeholder="Automatic from source directory"
             />
+            <small>Leave empty to infer from the group’s source directories.</small>
           </label>
-          {editor.kind === 'rename' && (
-            <label>
-              Project tag
-              <input
-                maxLength={80}
-                value={project}
-                onChange={(e) => setProject(e.target.value)}
-                placeholder="Automatic from source directory"
-              />
-              <small>Leave empty to infer from the group’s source directories.</small>
-            </label>
-          )}
-          {dialogError && <p role="alert">{dialogError}</p>}
-          <div className="dialog-actions">
-            <button type="button" onClick={close}>
-              Cancel
-            </button>
-            <button className="primary" disabled={busy || !name.trim()} type="submit">
-              {editor.kind === 'merge' ? 'Create group' : 'Save changes'}
-            </button>
-          </div>
-        </form>
-      )}
+        )}
+        {dialogError && <p role="alert">{dialogError}</p>}
+        <div className="dialog-actions">
+          <button type="button" onClick={close}>
+            Cancel
+          </button>
+          <button className="primary" disabled={busy || !name.trim()} type="submit">
+            {editor.kind === 'merge' ? 'Create group' : 'Save changes'}
+          </button>
+        </div>
+      </form>
     </dialog>
   );
 }

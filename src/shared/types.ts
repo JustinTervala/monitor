@@ -30,7 +30,6 @@ export interface TaskGroup {
 
 export interface MonitorState {
   version: 1;
-  initialized: boolean;
   sessions: Record<string, Session>;
   /** Array position is global relative priority, regardless of section. */
   groups: TaskGroup[];
@@ -56,8 +55,6 @@ export type Command =
   | { type: 'move'; groupId: string; targetId: string; placement: 'before' | 'after' }
   | { type: 'snooze'; groupId: string; until: number | null }
   | { type: 'unsnooze'; groupId: string }
-  | { type: 'track'; sessionId: string }
-  | { type: 'remove'; groupId: string }
   | { type: 'detach'; groupId: string; sessionId: string }
   | { type: 'notifications'; enabled: boolean };
 

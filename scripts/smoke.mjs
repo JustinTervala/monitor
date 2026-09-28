@@ -1,6 +1,5 @@
 import { _electron as electron } from 'playwright';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createServer } from 'node:net';
@@ -101,6 +100,7 @@ try {
       (await window.monitor.snapshot()).state.sessions['codex:bbbbbb'].status === 'review',
   );
   assert.equal(await page.locator('select').count(), 0);
+  assert.equal(await page.getByRole('button', { name: /Add tasks|Browse tasks/ }).count(), 0);
   await page.getByRole('button', { name: /Build the billing rollout.*1 running/ }).click();
   await page.getByRole('button', { name: 'Edit group', exact: true }).click();
   await page.getByRole('textbox', { name: 'Group name' }).fill('Billing rollout');
@@ -133,6 +133,27 @@ try {
   await page.getByRole('button', { name: 'Decrease priority', exact: true }).click();
   const snapshot = await page.evaluate(() => window.monitor.snapshot());
   assert.equal(snapshot.state.groups[1].name, 'Billing rollout');
+  assert.equal(await page.getByRole('button', { name: 'Remove from Monitor' }).count(), 0);
+  // A task created after startup appears and is followed without user action.
+  const updatedCatalog = new DatabaseSync(join(home, 'state_5.sqlite'));
+  updatedCatalog.exec(
+    "INSERT INTO threads VALUES('dddddd','A newly created task','/work/project','cli',0,100)",
+  );
+  updatedCatalog.close();
+  await page.waitForFunction(
+    async () => {
+      const value = await window.monitor.snapshot();
+      return (
+        value.state.groups.length === 3 && value.state.sessions['codex:dddddd']?.evidence === 'live'
+      );
+    },
+    undefined,
+    { timeout: 15000 },
+  );
+  await page.getByTestId('group-row').filter({ hasText: 'A newly created task' }).waitFor();
+  const discovered = await page.evaluate(() => window.monitor.snapshot());
+  assert.deepEqual(discovered.state.groups.slice(0, 2), snapshot.state.groups);
+  assert.deepEqual(discovered.state.groups[2].sessionIds, ['codex:dddddd']);
   // Observe the navigation call without launching an invented Codex session.
   await app.evaluate(({ shell }) => {
     globalThis.monitorOpened = [];
@@ -154,10 +175,10 @@ try {
   const reopened = await app.firstWindow();
   await reopened.getByRole('heading', { name: 'Your queue.' }).waitFor();
   const persisted = await reopened.evaluate(() => window.monitor.snapshot());
-  assert.equal(persisted.state.groups.length, 2);
+  assert.equal(persisted.state.groups.length, 3);
   assert.equal(persisted.state.groups[1].name, 'Billing rollout');
   console.log(
-    'Electron smoke passed: live adapter fixture, UI grouping, editing, snoozing, priority, session URL, persistence. Screenshot: .runtime/smoke.png',
+    'Electron smoke passed: automatic discovery at startup and during execution, UI grouping, editing, snoozing, priority, session URL, persistence. Screenshot: .runtime/smoke.png',
   );
 } finally {
   await app?.close();

@@ -25,6 +25,8 @@ Future Claude observer     → SessionProvider┘       │
 
 Adapters own session status. UI commands own grouping, manual names, project overrides, global order, notification preferences, and snooze deadlines. No command can set a session's runtime state or read receipt.
 
+Discovery automatically admits every nonarchived source task, without a one-time seed limit or a manual import command. New tasks append to the queue; later refreshes do not replace existing groups. This also fills previously unimported tasks when upgrading an older initialized store.
+
 The `groups` array is the persistent total priority order. Section rendering filters that array without reordering it. A merge inherits the higher position and retains the drop target's identity, project override, and snooze policy. Detaching creates an active singleton immediately after the source group.
 
 Monitor stores no transcript bodies. On launch, cached session states become unavailable until corroborated by the provider. Groups, order, and snoozes survive restarts. Source files are read-only; only Monitor's own database is written.

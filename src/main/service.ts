@@ -50,7 +50,19 @@ export class MonitorService extends EventEmitter {
     this.scheduleWake();
   }
   private ingest(sessions: Session[]) {
-    let changed = false;
+    // Discovery owns admission to the queue. Preserve every existing group and
+    // append new sessions so polling cannot reset names, snoozes or priority.
+    const grouped = new Set(this.state.groups.flatMap((group) => group.sessionIds));
+    let trackingChanged = false;
+    for (const session of [...sessions].sort(
+      (a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id),
+    )) {
+      if (session.archived || grouped.has(session.id)) continue;
+      this.state.groups.push(newGroup(session.id));
+      grouped.add(session.id);
+      trackingChanged = true;
+    }
+    let changed = trackingChanged;
     for (const session of sessions) {
       const old = this.state.sessions[session.id];
       const { observedAt: _oldTime, ...oldValue } = old || {};
@@ -84,16 +96,7 @@ export class MonitorService extends EventEmitter {
         });
       }
     }
-    if (!this.state.initialized && sessions.length) {
-      this.state.groups = sessions
-        .filter((s) => !s.archived)
-        .sort((a, b) => b.updatedAt - a.updatedAt)
-        .slice(0, 20)
-        .map((s) => newGroup(s.id));
-      this.state.initialized = true;
-      this.updateTracking();
-      changed = true;
-    }
+    if (trackingChanged) this.updateTracking();
     if (changed) {
       this.persistSoon();
       this.publish();

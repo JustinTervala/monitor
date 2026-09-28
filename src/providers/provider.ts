@@ -9,7 +9,7 @@ export interface ObserverCallbacks {
 export interface SessionProvider {
   readonly id: ProviderId;
   start(callbacks: ObserverCallbacks): Promise<void>;
-  /** Only actively follow the sessions the user has placed in the queue. */
+  /** Follow all sessions admitted automatically by discovery. */
   track(externalIds: string[]): void;
   refresh(): Promise<void>;
   /** Return a validated navigation URL. Never send a prompt or resume execution. */

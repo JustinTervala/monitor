@@ -10,7 +10,7 @@ Official reference: [Codex app-server](https://learn.chatgpt.com/docs/app-server
 
 ## Discovery
 
-Use `CODEX_HOME` or `~/.codex`. Open the highest `state_N.sqlite` read-only with `PRAGMA query_only=ON`. Read validated metadata columns from `threads`: identity, title/name, cwd, source, archived, update time. Discover up to 200 recent nonarchived local entries and explicitly fetch tracked entries outside that range. Ignore subagent entries. Update every five seconds.
+Use `CODEX_HOME` or `~/.codex`. Open the highest `state_N.sqlite` read-only with `PRAGMA query_only=ON`. Read validated metadata columns from `threads`: identity, title/name, cwd, source, archived, update time. Discover all nonarchived local entries without a recency/count cutoff and explicitly fetch existing group members that have since been archived. Ignore subagent entries. Update every five seconds.
 
 A catalog timestamp is not runtime evidence. Catalog-only tasks remain unavailable.
 

@@ -14,7 +14,7 @@ await provider.start({
     sessions = value;
     if (!following && sessions.length) {
       following = true;
-      provider.track(requested.length ? requested : sessions.slice(0, 20).map((s) => s.externalId));
+      provider.track(requested.length ? requested : sessions.map((s) => s.externalId));
     }
   },
 });

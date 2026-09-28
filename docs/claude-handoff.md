@@ -14,7 +14,7 @@ Implement Claude's side of Monitor while keeping the user's existing Claude harn
 
 Add `src/providers/claude/` with a class implementing `SessionProvider`, `id = 'claude'`. Register it beside `new CodexProvider()` in `src/main/main.ts`. No replacement Claude harness, auto-prompting, or cross-agent handoff is needed.
 
-`start(callbacks)` discovers sessions and emits observations/health. `track(externalIds)` selects tasks for live observation; metadata discovery may cover more tasks. `refresh()` reconciles source state; `stop()` releases every watcher/socket/timer. `sessionUrl(externalId)` returns a verified exact-session URI. The main process currently accepts only `codex:` and `claude:`; add a narrowly validated official destination if Claude requires another form. Never pass an arbitrary source-provided URL directly to the shell.
+`start(callbacks)` automatically discovers all nonarchived sessions and emits observations/health, including sessions created later. Do not require manual import or impose a recent-task count limit; paginate the source catalog when necessary. The service admits newly discovered sessions automatically, preserving existing workstream priority. `track(externalIds)` receives the automatically admitted tasks to follow live. `refresh()` reconciles source state; `stop()` releases every watcher/socket/timer. `sessionUrl(externalId)` returns a verified exact-session URI. The main process currently accepts only `codex:` and `claude:`; add a narrowly validated official destination if Claude requires another form. Never pass an arbitrary source-provided URL directly to the shell.
 
 Emit globally namespaced ids (`claude:<source-id>`) with stable `externalId`. Include title, full source directory or null, source timestamps in milliseconds, status, detail, evidence, archived flag, and stable `attentionKey`.
 
@@ -29,7 +29,7 @@ Do not emit `live` idle observations before result identity has loaded if it can
 
 ## User model to preserve
 
-One row per group. Group status follows the highest member state. Group names are manual; project tags derive only when full source directories agree. Priority is one persistent global order. Only groups can be snoozed. Individual task states have no user editor. Source read receipts stay authoritative.
+All discovered nonarchived tasks appear automatically; there is no Add Task or Remove from Monitor control. New tasks append to the saved global priority order. One row per group. Group status follows the highest member state. Group names are manual; project tags derive only when full source directories agree. Priority is one persistent global order. Only groups can be snoozed. Individual task states have no user editor. Source read receipts stay authoritative.
 
 The service owns notification suppression, deduplication, persistence, and snooze policy. Keep those policies out of the adapter. A Claude result arriving in a snoozed mixed-provider group must remain quiet while its observed state updates.
 
@@ -41,4 +41,4 @@ If read receipts or exact navigation are unavailable, report that limitation exp
 
 ## Acceptance
 
-Add isolated adapter tests and a read-only live probe. Demonstrate an existing task moving through running, attention/completion, and acknowledgment as supported, plus reconnect behavior and exact-session opening. Share which paths were observed live versus fixture-tested. Run `npm run check` and `npm run smoke` before handing the branch back.
+Add isolated adapter tests and a read-only live probe. Demonstrate an existing task moving through running, attention/completion, and acknowledgment as supported, plus reconnect behavior and exact-session opening. Share which paths were observed live versus fixture-tested. Run `npm run check` and `npm run smoke` before pushing directly to main. This is a personal project with no PR review workflow.

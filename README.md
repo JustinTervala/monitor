@@ -26,11 +26,12 @@ The renderer reloads during development. Restart `npm run dev` after changing ma
 
 ## Use
 
-- The 20 most recently updated local tasks seed your first queue. **Add tasks** browses up to 200 recent tasks; tracked tasks remain tracked beyond that discovery window.
+- All non-archived tasks in the local Codex catalog appear automatically, including tasks created while Monitor is running. There is no import step or task-count limit. Discovery refreshes every five seconds.
 - Select a row to inspect its tasks. **Open in Codex** opens that exact task.
 - Drag a row onto another row and name the combined workstream. One group occupies one row.
 - Drag the **⠿ handle** to reorder. The **Priority** view shows the global order across sections; arrow buttons in details provide keyboard-accessible ordering.
-- **Edit group** changes its name or project tag. **Detach** splits out a member. **Remove from Monitor** stops tracking without deleting the source task.
+- **Edit group** changes its name or project tag. **Detach** splits out a member. Use group snoozing to put a workstream aside.
+- Existing groups, names, snoozes, and priority survive discovery and upgrades. Newly discovered tasks start as single-task rows at the end of your saved priority order.
 - Snooze the whole workstream for an hour, until tomorrow at 9 AM local time, or until restored. Members keep executing and notifications pause.
 
 Section precedence is **Needs review → Running → Status unavailable → Read**; Snoozed overrides placement. Relative priority remains stable across all these states. There is no task-status editor. Codex owns execution state and read receipts.
@@ -60,7 +61,7 @@ Stack: **Electron + React + TypeScript + Vite + SQLite** (`node:sqlite`).
 ```sh
 npm run check        # TypeScript, behavioral tests, production build
 npm run smoke        # Actual Electron UI, isolated fake Codex socket/database
-npm run probe:codex  # Read-only live probe of the 20 most recent local tasks
+npm run probe:codex  # Read-only live probe of all discovered local tasks
 npm run probe:codex -- TASK_ID
 ```
 

@@ -511,12 +511,6 @@ h1 {
   margin: 16px 0;
   line-height: 1.6;
 }
-.remove-button {
-  font-size: 10px;
-  color: #8c8c7b;
-  background: transparent;
-  border-color: #dce3d3;
-}
 .error-banner {
   display: flex;
   align-items: center;
@@ -619,40 +613,6 @@ footer .quiet {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 25px;
-}
-.available-list {
-  max-height: 360px;
-  overflow: auto;
-  margin-top: 16px;
-}
-.available-list > div {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  padding: 12px 0;
-  border-bottom: 1px solid #e2e8da;
-}
-.available-list > div > span {
-  flex: 1;
-  min-width: 0;
-}
-.available-list strong {
-  font-size: 12px;
-  display: block;
-  font-weight: 550;
-  overflow-wrap: anywhere;
-}
-.available-list small {
-  font-size: 10px;
-  display: block;
-  color: #96a088;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  margin-top: 4px;
-}
-.available-list button {
-  font-size: 11px;
 }
 .loading {
   height: 100vh;
