@@ -1,6 +1,6 @@
 # Product specification
 
-Status: agreed interaction model with open implementation questions.
+Status: implemented for local Codex desktop sessions; Claude integration remains a separate adapter task.
 
 ## Workflow
 
@@ -29,13 +29,14 @@ For a group that is not snoozed, the highest section represented by any member d
 
 1. **Needs review:** a session has a new result or otherwise needs the user's attention.
 2. **Running:** at least one session is working and no session currently needs attention.
-3. **Read:** all results have been acknowledged and no session is running or needs attention.
+3. **Status unavailable:** a member lacks current source evidence and no member is running or needs attention.
+4. **Read:** all members have source read receipts and no session is running or needs attention.
 
 Example: a group containing a review task, a running task, and a read task appears only in Needs review. After the review item is acknowledged, the group moves to Running. The group's identity and saved priority are unchanged.
 
-Task states are read-only in Monitor. There is no per-task status dropdown. Runtime state comes from the harness. Read/acknowledgment is separate from execution state; its source and exact interaction need validation during integration work.
+Task states are read-only in Monitor. There is no per-task status dropdown. Runtime state comes from the harness. Read/acknowledgment is separate from execution state; Codex supplies the authoritative read receipt. Opening and reading the task in Codex updates Monitor.
 
-Waiting for approval, waiting for input, errors, and disconnected observers must remain distinguishable in the task details. An observer losing contact is not evidence of task completion. The treatment of unknown state in the main queue remains a design question.
+Waiting for approval, waiting for input, errors, and disconnected observers must remain distinguishable in the task details. An observer losing contact is not evidence of task completion. Unknown state has its own section between Running and Read.
 
 ## Relative priority
 
@@ -44,7 +45,7 @@ Maintain one persistent total order of queue entries, independent of current sec
 - Reordering changes group priority, not session state.
 - A section change never changes saved relative priority.
 - Grouping and renaming do not create extra queue entries.
-- Proposed creation default: a newly created group inherits the higher priority of its two original entries.
+- Creation default: a newly created group inherits the higher priority of its two original entries.
 - Use distinct drag targets for grouping and reordering: row body for grouping, a handle and insertion indicator for ordering.
 
 Priority must survive application restarts. The displayed rank can have gaps within a section because it refers to the global ordering.
@@ -76,7 +77,7 @@ While a group is snoozed:
 
 On expiry or explicit unsnooze, derive the group's section from its current task states and reinsert it using saved priority. Never restore a stale pre-snooze section.
 
-The concept supports one hour, tomorrow morning, or until explicitly unsnoozed. Final time presets can change. Behavior when combining snoozed and active entries needs an explicit design decision.
+The concept supports one hour, tomorrow morning, or until explicitly unsnoozed. Merging retains the drop target’s snooze policy, made explicit in the naming dialog. Detaching creates an active singleton immediately after the original group.
 
 ## Notifications and navigation
 
@@ -86,10 +87,10 @@ Notification clicks and individual session entries should open the exact origina
 
 Snoozing controls Monitor's notifications. Managing duplicate notifications from the source apps is a separate setup concern; do not alter those settings automatically.
 
-## Later editing work
+## Editing and later work
 
-- Rename groups and override or clear project tags.
-- Add/remove members, split groups, and define group merging behavior.
+- Implemented: rename groups and override or clear project tags.
+- Implemented: merge groups, detach members, and remove entries from Monitor without source deletion.
 - Archive completed workstreams without deleting their source sessions.
 - Improve keyboard access, drag affordances, and detail-pane layout.
 - Attach handoff documents and PR references.

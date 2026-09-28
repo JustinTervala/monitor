@@ -1,41 +1,69 @@
 # Monitor
 
-A local Mac control plane for ongoing Claude and Codex work. Keep using the existing desktop apps; Monitor shows what needs attention, preserves workstream priority, and opens the relevant session.
+A local Mac control plane for ongoing AI work. Keep using Codex; Monitor watches your existing sessions, preserves workstream priority, and opens the originating task.
 
-## Status
+The first implementation is **Codex-only**. Claude has an independent [adapter handoff](docs/claude-handoff.md).
 
-Product design and architecture proposal. The application and session integrations have not been implemented yet.
+## Run
 
-## Product model
+Requires macOS, Node 24+, and Codex desktop running with local tasks. No API key or extra agent harness.
 
-- One named task group occupies one queue row, even when its tasks have different states.
-- The group's section follows its highest-attention task: **Needs review → Running → Read**.
-- Groups have a persistent relative priority that survives section changes.
-- Individual task states come from their sessions and are displayed read-only.
-- Snoozing applies to the whole group. Sessions keep working; the group defers notifications and returns at its saved priority when the snooze ends.
-- A project tag is inferred from the shared source directory when all tasks agree, with a manual override available.
+```sh
+npm ci
+npm run dev
+```
 
-See [the product specification](docs/product-spec.md) for the agreed behavior and remaining design questions.
+For the production build:
 
-## Proposed stack
+```sh
+npm run build
+npm start
+```
 
-**Electron + React + TypeScript + SQLite**, with Vite for UI development.
+Create a local Mac application with `npm run package:mac`. It writes `out/Monitor-macos-arm64.zip` (or `x64` on an Intel Mac). Extract **Monitor.app** into `~/Applications` or `/Applications` and open it. The bundle is assembled outside synced folders and signed ad hoc for local use; notarized distribution is not configured.
 
-- **Electron main process:** app lifecycle, native notifications, opening session links, local persistence, and observer coordination.
-- **React renderer:** grouped queue, drag and drop, editing, and session details.
-- **TypeScript adapters:** separate Codex and Claude integrations feeding normalized session events into a shared model.
-- **SQLite:** durable grouping, relative order, snoozes, session references, and event checkpoints.
+The renderer reloads during development. Restart `npm run dev` after changing main-process or provider code. Close the window to keep observing in the menu bar; **Quit Monitor** stops observation.
 
-See [the architecture proposal](docs/architecture.md) for tradeoffs and integration boundaries. This is a recommendation, not a claim that a runtime is already scaffolded.
+## Use
 
-## First implementation milestone
+- The 20 most recently updated local tasks seed your first queue. **Add tasks** browses up to 200 recent tasks; tracked tasks remain tracked beyond that discovery window.
+- Select a row to inspect its tasks. **Open in Codex** opens that exact task.
+- Drag a row onto another row and name the combined workstream. One group occupies one row.
+- Drag the **⠿ handle** to reorder. The **Priority** view shows the global order across sections; arrow buttons in details provide keyboard-accessible ordering.
+- **Edit group** changes its name or project tag. **Detach** splits out a member. **Remove from Monitor** stops tracking without deleting the source task.
+- Snooze the whole workstream for an hour, until tomorrow at 9 AM local time, or until restored. Members keep executing and notifications pause.
 
-Prove the full loop on one existing session in each desktop app:
+Section precedence is **Needs review → Running → Status unavailable → Read**; Snoozed overrides placement. Relative priority remains stable across all these states. There is no task-status editor. Codex owns execution state and read receipts.
 
-1. Identify the session and observe its state without taking ownership of execution.
-2. Detect completion or a request for attention.
-3. Deliver one native notification for that transition.
-4. Open the exact originating session on click.
-5. Reconcile state after a restart without duplicate notifications.
+## Notifications
 
-Then build the queue UI against those adapters. Completion detection and exact-session navigation remain unverified until tested against the installed apps.
+Newly observed completions, input requests, approvals, and errors can produce native macOS notifications. Clicking opens the originating task. Notifications are on by default and can be toggled in the toolbar; macOS permission and Focus settings still apply.
+
+Use **Monitor → Test notification** to check native delivery on your Mac.
+
+Use the packaged app for native notification testing: Electron requires a valid app signature on current macOS notification APIs. `npm run dev` is for UI development. See [Electron's notification requirements](https://www.electronjs.org/docs/latest/tutorial/notifications#macos).
+
+Initial snapshots and reconnection backlogs are quiet. Result/request identities are persisted to suppress duplicates. Snooze expiry does not replay notifications for work that finished while snoozed. A task that finishes while already read in Codex may notify but remains in Read.
+
+## Integration limits
+
+This release observes **local Codex desktop sessions**, not cloud/remote tasks or arbitrary CLI processes. It reads catalog metadata from Codex's SQLite database and subscribes as a non-owning follower to the desktop's local IPC stream. It never resumes tasks, sends prompts, answers approvals, or changes Codex settings.
+
+The desktop observer protocol is **internal**, tested against desktop `26.903.61454`, stream version `11`. It may change with app updates. Unsupported or disconnected state becomes **Status unavailable**, never an invented completion. A catalog entry alone is insufficient to know whether a task is running; open it in Codex if no desktop window currently supplies live state.
+
+Codex's socket sends conversation snapshots. The adapter immediately reduces them to metadata, runtime state, and result/request identities. Prompts, responses, and tool payloads are not persisted or sent to the renderer. Monitor's own state lives in its Electron user-data directory in `monitor.sqlite`.
+
+## Development
+
+Stack: **Electron + React + TypeScript + Vite + SQLite** (`node:sqlite`).
+
+```sh
+npm run check        # TypeScript, behavioral tests, production build
+npm run smoke        # Actual Electron UI, isolated fake Codex socket/database
+npm run probe:codex  # Read-only live probe of the 20 most recent local tasks
+npm run probe:codex -- TASK_ID
+```
+
+The smoke test creates temporary source and Monitor databases; it does not edit your real queue. Its screenshot is saved to `.runtime/smoke.png`.
+
+See [architecture](docs/architecture.md), [product behavior](docs/product-spec.md), [Codex integration](docs/codex-integration.md), and the [Claude handoff](docs/claude-handoff.md).
