@@ -31,7 +31,9 @@ Do not emit `live` idle observations before result identity has loaded if it can
 
 All discovered nonarchived tasks appear automatically; there is no Add Task or Remove from Monitor control. New tasks append to the saved global priority order. One row per group. Group status follows the highest member state. Group names are manual; project tags derive only when full source directories agree. Priority is one persistent global order. Only groups can be snoozed. Individual task states have no user editor. Source read receipts stay authoritative.
 
-The service owns notification suppression, deduplication, persistence, and snooze policy. Keep those policies out of the adapter. A Claude result arriving in a snoozed mixed-provider group must remain quiet while its observed state updates.
+Groups can also be archived locally in Monitor and browsed on a separate page by project and source recency. `TaskGroup.archived` is independent of provider-owned `Session.archived`. Monitor archive/restore never changes source apps. Archived memberships remain followed and must not be reimported into the queue; supply accurate source `updatedAt` values rather than poll timestamps.
+
+The service owns notification suppression, deduplication, persistence, archive placement, and snooze policy. Keep those policies out of the adapter. A Claude result arriving in a snoozed or archived mixed-provider group must remain quiet while its observed state updates.
 
 ## Determine explicitly
 

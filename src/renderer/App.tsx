@@ -9,6 +9,7 @@ import {
   sectionOrder,
 } from '../shared/queue';
 import type { Command, Session, Snapshot, TaskGroup } from '../shared/types';
+import { ArchiveIcon, ArchivePage } from './ArchivePage';
 
 type Editor =
   { kind: 'rename'; group: TaskGroup } | { kind: 'merge'; source: TaskGroup; target: TaskGroup };
@@ -51,6 +52,7 @@ export function App() {
   const [drag, setDrag] = useState<{ id: string; mode: 'merge' | 'move' } | null>(null);
   const [drop, setDrop] = useState<{ id: string; placement: 'before' | 'after' } | null>(null);
   const [priorityView, setPriorityView] = useState(false);
+  const [page, setPage] = useState<'queue' | 'archive'>('queue');
   const revision = useRef(0);
   useEffect(() => {
     let mounted = true;
@@ -108,18 +110,40 @@ export function App() {
       </main>
     );
   const { state, health } = snapshot;
+  const activeGroups = state.groups.filter((g) => !g.archived);
+  const archivedCount = state.groups.length - activeGroups.length;
   const selectedGroup = state.groups.find((g) => g.id === selected);
   const selectedIndex = state.groups.findIndex((g) => g.id === selected);
+  const activeIndex = activeGroups.findIndex((g) => g.id === selected);
   const tracked = new Set(state.groups.flatMap((g) => g.sessionIds));
   const matches = (g: TaskGroup) =>
     `${groupName(state, g)} ${projectTag(state, g)} ${groupSessions(state, g)
-      .map((s) => s.title)
+      .map((s) => `${s.title} ${s.directory || ''}`)
       .join(' ')}`
       .toLowerCase()
       .includes(search.toLowerCase());
-  const reviewCount = state.groups.filter((g) => groupSection(state, g) === 'review').length;
-  const runningCount = state.groups.filter((g) => groupSection(state, g) === 'running').length;
+  const reviewCount = activeGroups.filter((g) => groupSection(state, g) === 'review').length;
+  const runningCount = activeGroups.filter((g) => groupSection(state, g) === 'running').length;
   const codex = health.find((h) => h.provider === 'codex');
+  function navigate(next: 'queue' | 'archive') {
+    setPage(next);
+    setSelected(null);
+    setSearch('');
+    setDrag(null);
+    setDrop(null);
+  }
+  async function archive(group: TaskGroup) {
+    if (await command({ type: 'archive', groupId: group.id }))
+      setSelected((id) => (id === group.id ? null : id));
+  }
+  async function restore(group: TaskGroup, showInQueue = false) {
+    if (await command({ type: 'restore', groupId: group.id })) {
+      if (showInQueue) {
+        navigate('queue');
+        setSelected(group.id);
+      } else setSelected((id) => (id === group.id ? null : id));
+    }
+  }
   function beginDrag(event: DragEvent, group: TaskGroup, mode: 'merge' | 'move') {
     event.stopPropagation();
     event.dataTransfer.effectAllowed = 'move';
@@ -202,6 +226,14 @@ export function App() {
             <span>↗</span>
           </span>
         </button>
+        <button
+          className="quiet archive-row-action"
+          title="Archive workstream"
+          aria-label={`Archive ${groupName(state, group)}`}
+          onClick={() => void archive(group)}
+        >
+          <ArchiveIcon />
+        </button>
       </div>
     );
   }
@@ -211,19 +243,41 @@ export function App() {
         <span>MONITOR</span>
         <span>YOUR ATTENTION, IN ORDER</span>
       </div>
+      <nav className="page-nav" aria-label="Monitor pages">
+        <button
+          aria-current={page === 'queue' ? 'page' : undefined}
+          onClick={() => navigate('queue')}
+        >
+          Queue <span>{activeGroups.length}</span>
+        </button>
+        <button
+          aria-current={page === 'archive' ? 'page' : undefined}
+          onClick={() => navigate('archive')}
+        >
+          <ArchiveIcon /> Archived <span>{archivedCount}</span>
+        </button>
+      </nav>
       <header className="page-header">
         <div>
-          <div className="eyebrow">WORKSTREAMS</div>
+          <div className="eyebrow">{page === 'queue' ? 'WORKSTREAMS' : 'PROJECTS & HISTORY'}</div>
           <h1>
-            Your queue<span className="heading-dot">.</span>
+            {page === 'queue' ? 'Your queue' : 'Archived'}
+            <span className="heading-dot">.</span>
           </h1>
-          <p>
-            {reviewCount
-              ? `${reviewCount} ${reviewCount === 1 ? 'workstream needs' : 'workstreams need'} you`
-              : 'Room to focus'}
-            <span className="separator">/</span>
-            {runningCount} running
-          </p>
+          {page === 'queue' ? (
+            <p>
+              {reviewCount
+                ? `${reviewCount} ${reviewCount === 1 ? 'workstream needs' : 'workstreams need'} you`
+                : 'Room to focus'}
+              <span className="separator">/</span>
+              {runningCount} running
+            </p>
+          ) : (
+            <p>
+              {archivedCount} {archivedCount === 1 ? 'workstream' : 'workstreams'} put away{' '}
+              <span className="separator">/</span> Ready when you need them
+            </p>
+          )}
         </div>
       </header>
       <div className="toolbar">
@@ -231,19 +285,26 @@ export function App() {
           <span>⌕</span>
           <input
             aria-label="Filter workstreams"
-            placeholder="Find a workstream…"
+            placeholder={page === 'queue' ? 'Find a workstream…' : 'Search the archive…'}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </label>
-        <div className="view-toggle" aria-label="Queue view">
-          <button className={!priorityView ? 'active' : ''} onClick={() => setPriorityView(false)}>
-            By state
-          </button>
-          <button className={priorityView ? 'active' : ''} onClick={() => setPriorityView(true)}>
-            Priority
-          </button>
-        </div>
+        {page === 'queue' ? (
+          <div className="view-toggle" aria-label="Queue view">
+            <button
+              className={!priorityView ? 'active' : ''}
+              onClick={() => setPriorityView(false)}
+            >
+              By state
+            </button>
+            <button className={priorityView ? 'active' : ''} onClick={() => setPriorityView(true)}>
+              Priority
+            </button>
+          </div>
+        ) : (
+          <span className="archive-sort">Project · Recent activity</span>
+        )}
         <button
           className={`quiet notification-toggle ${state.notifications ? '' : 'muted'}`}
           title="Monitor completion notifications"
@@ -262,62 +323,83 @@ export function App() {
         </div>
       )}
       <div className={`workspace ${selectedGroup ? 'with-details' : ''}`}>
-        <main className="queue">
-          <div className="queue-hint">
-            Drag a row to group. Drag ⠿ to prioritize.{' '}
-            <span>Numbers stay fixed as states change.</span>
-          </div>
-          {priorityView ? (
-            <section className="queue-section">
-              <div className="section-heading">
-                <h2>Global priority</h2>
-                <span>{state.groups.length}</span>
-              </div>
-              {state.groups.filter(matches).map(row)}
-            </section>
-          ) : (
-            sectionOrder.map((section) => {
-              const groups = state.groups.filter(
-                (g) => groupSection(state, g) === section && matches(g),
-              );
-              if (!groups.length && section !== 'review' && section !== 'running') return null;
-              return (
-                <section
-                  className={`queue-section section-${section}`}
-                  key={section}
-                  aria-label={sectionLabels[section]}
-                >
-                  <div className="section-heading">
-                    <span className={`status-dot ${section}`} />
-                    <h2>{sectionLabels[section]}</h2>
-                    <span>{groups.length}</span>
-                  </div>
-                  {groups.length ? (
-                    groups.map(row)
-                  ) : (
-                    <div className="empty-section">
-                      {search
-                        ? 'No matching workstreams'
-                        : section === 'review'
-                          ? 'Nothing waiting for your attention.'
-                          : 'No workstreams running right now.'}
-                    </div>
-                  )}
-                </section>
-              );
-            })
-          )}
-          {!state.groups.length && (
-            <div className="empty-queue">
-              <h2>Your tasks appear automatically.</h2>
-              <p>Open Codex and start a task. It will appear here on the next refresh.</p>
+        {page === 'archive' ? (
+          <ArchivePage
+            state={state}
+            search={search}
+            matches={matches}
+            selected={selected}
+            select={setSelected}
+            restore={(group) => void restore(group)}
+          />
+        ) : (
+          <main className="queue">
+            <div className="queue-hint">
+              Drag a row to group. Drag ⠿ to prioritize.{' '}
+              <span>Numbers stay fixed as states change.</span>
             </div>
-          )}
-        </main>
+            {priorityView ? (
+              <section className="queue-section">
+                <div className="section-heading">
+                  <h2>Global priority</h2>
+                  <span>{activeGroups.length}</span>
+                </div>
+                {activeGroups.filter(matches).map(row)}
+              </section>
+            ) : (
+              sectionOrder.map((section) => {
+                const groups = activeGroups.filter(
+                  (g) => groupSection(state, g) === section && matches(g),
+                );
+                if (!groups.length && section !== 'review' && section !== 'running') return null;
+                return (
+                  <section
+                    className={`queue-section section-${section}`}
+                    key={section}
+                    aria-label={sectionLabels[section]}
+                  >
+                    <div className="section-heading">
+                      <span className={`status-dot ${section}`} />
+                      <h2>{sectionLabels[section]}</h2>
+                      <span>{groups.length}</span>
+                    </div>
+                    {groups.length ? (
+                      groups.map(row)
+                    ) : (
+                      <div className="empty-section">
+                        {search
+                          ? 'No matching workstreams'
+                          : section === 'review'
+                            ? 'Nothing waiting for your attention.'
+                            : 'No workstreams running right now.'}
+                      </div>
+                    )}
+                  </section>
+                );
+              })
+            )}
+            {!activeGroups.length && (
+              <div className="empty-queue">
+                <h2>
+                  {archivedCount ? 'Your queue is clear.' : 'Your tasks appear automatically.'}
+                </h2>
+                <p>
+                  {archivedCount
+                    ? 'Restore an archived workstream, or start a new task in Codex.'
+                    : 'Open Codex and start a task. It will appear here on the next refresh.'}
+                </p>
+              </div>
+            )}
+          </main>
+        )}
         {selectedGroup && (
           <aside className="details" aria-label="Workstream details">
             <div className="detail-top">
-              <span className="eyebrow">WORKSTREAM · #{selectedIndex + 1}</span>
+              <span className="eyebrow">
+                {selectedGroup.archived
+                  ? 'ARCHIVED WORKSTREAM'
+                  : `WORKSTREAM · #${selectedIndex + 1}`}
+              </span>
               <button
                 className="icon-button"
                 aria-label="Close details"
@@ -332,70 +414,91 @@ export function App() {
               <button onClick={() => setEditor({ kind: 'rename', group: selectedGroup })}>
                 Edit group
               </button>
-              <button
-                title="Increase global priority"
-                aria-label="Increase priority"
-                disabled={selectedIndex === 0}
-                onClick={() =>
-                  void command({
-                    type: 'move',
-                    groupId: selectedGroup.id,
-                    targetId: state.groups[selectedIndex - 1].id,
-                    placement: 'before',
-                  })
-                }
-              >
-                ↑
-              </button>
-              <button
-                title="Decrease global priority"
-                aria-label="Decrease priority"
-                disabled={selectedIndex === state.groups.length - 1}
-                onClick={() =>
-                  void command({
-                    type: 'move',
-                    groupId: selectedGroup.id,
-                    targetId: state.groups[selectedIndex + 1].id,
-                    placement: 'after',
-                  })
-                }
-              >
-                ↓
-              </button>
+              {!selectedGroup.archived && (
+                <>
+                  <button
+                    title="Increase global priority"
+                    aria-label="Increase priority"
+                    disabled={activeIndex === 0}
+                    onClick={() =>
+                      void command({
+                        type: 'move',
+                        groupId: selectedGroup.id,
+                        targetId: activeGroups[activeIndex - 1].id,
+                        placement: 'before',
+                      })
+                    }
+                  >
+                    ↑
+                  </button>
+                  <button
+                    title="Decrease global priority"
+                    aria-label="Decrease priority"
+                    disabled={activeIndex === activeGroups.length - 1}
+                    onClick={() =>
+                      void command({
+                        type: 'move',
+                        groupId: selectedGroup.id,
+                        targetId: activeGroups[activeIndex + 1].id,
+                        placement: 'after',
+                      })
+                    }
+                  >
+                    ↓
+                  </button>
+                </>
+              )}
             </div>
-            <div className="snooze-control">
-              <label htmlFor="group-snooze">Defer this workstream</label>
-              <select
-                id="group-snooze"
-                aria-label="Snooze workstream"
-                value={isSnoozed(selectedGroup) ? 'current' : 'active'}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (value === 'active')
-                    void command({ type: 'unsnooze', groupId: selectedGroup.id });
-                  else if (value !== 'current')
-                    void command({
-                      type: 'snooze',
-                      groupId: selectedGroup.id,
-                      until:
-                        value === 'hour'
-                          ? Date.now() + 3600000
-                          : value === 'tomorrow'
-                            ? tomorrow()
-                            : null,
-                    });
-                }}
-              >
-                <option value="active">Active</option>
-                {isSnoozed(selectedGroup) && (
-                  <option value="current">{snoozeLabel(selectedGroup)}</option>
-                )}
-                <option value="hour">Snooze for 1 hour</option>
-                <option value="tomorrow">Tomorrow at 9 AM</option>
-                <option value="manual">Until I restore it</option>
-              </select>
-              <p>Tasks keep working. Monitor notifications pause for this group.</p>
-            </div>
+            {selectedGroup.archived ? (
+              <div className="archive-control">
+                <button className="primary" onClick={() => void restore(selectedGroup, true)}>
+                  Restore to queue
+                </button>
+                <p>
+                  Archived in Monitor. Tasks stay in their source apps, and Monitor notifications
+                  are paused.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="snooze-control">
+                  <label htmlFor="group-snooze">Defer this workstream</label>
+                  <select
+                    id="group-snooze"
+                    aria-label="Snooze workstream"
+                    value={isSnoozed(selectedGroup) ? 'current' : 'active'}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === 'active')
+                        void command({ type: 'unsnooze', groupId: selectedGroup.id });
+                      else if (value !== 'current')
+                        void command({
+                          type: 'snooze',
+                          groupId: selectedGroup.id,
+                          until:
+                            value === 'hour'
+                              ? Date.now() + 3600000
+                              : value === 'tomorrow'
+                                ? tomorrow()
+                                : null,
+                        });
+                    }}
+                  >
+                    <option value="active">Active</option>
+                    {isSnoozed(selectedGroup) && (
+                      <option value="current">{snoozeLabel(selectedGroup)}</option>
+                    )}
+                    <option value="hour">Snooze for 1 hour</option>
+                    <option value="tomorrow">Tomorrow at 9 AM</option>
+                    <option value="manual">Until I restore it</option>
+                  </select>
+                  <p>Tasks keep working. Monitor notifications pause for this group.</p>
+                </div>
+                <button className="archive-workstream" onClick={() => void archive(selectedGroup)}>
+                  <ArchiveIcon /> Archive workstream
+                </button>
+              </>
+            )}
             <div className="member-heading">
               <h3>Tasks</h3>
               <span>{selectedGroup.sessionIds.length}</span>

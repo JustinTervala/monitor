@@ -118,10 +118,11 @@ test('upgrading an already initialized queue discovers omissions without resetti
     ...emptyState(),
     initialized: true,
     sessions: { [a.id]: a, [b.id]: b, [c.id]: c },
-    groups: [grouped],
+    groups: [structuredClone(grouped)],
     notifications: false,
     notificationKeys: { [a.id]: 'result:old' },
   };
+  Reflect.deleteProperty(legacy.groups[0], 'archived');
   store.write(legacy);
   const provider = new FakeProvider();
   const service = new MonitorService(store, [provider], () =>
@@ -211,4 +212,43 @@ test('timer expires snooze without changing task state or replaying notification
   assert.equal(service.snapshot().state.groups[0].snooze, null);
   assert.equal(service.snapshot().state.sessions['codex:aaaaaa'].status, 'review');
   assert.equal(notices.length, 0);
+});
+
+test('archive persists, keeps observing without rediscovery or notifications, and restores quietly', async (t) => {
+  const path = mkdtempSync(join(tmpdir(), 'monitor-test-'));
+  const database = join(path, 'state.sqlite');
+  const notices: NotificationEvent[] = [];
+  let provider = new FakeProvider();
+  let service = new MonitorService(new MonitorStore(database), [provider], (n) => notices.push(n));
+  t.after(() => {
+    service.stop();
+    rmSync(path, { recursive: true });
+  });
+  await service.start();
+  provider.emit(session('aaaaaa'), session('bbbbbb'));
+  const [a, b] = service.snapshot().state.groups;
+  service.command({ type: 'archive', groupId: a.id });
+  assert.deepEqual(provider.tracked, ['aaaaaa', 'bbbbbb']);
+  const finished = session('aaaaaa', {
+    status: 'review',
+    attentionKey: 'result:archived',
+    updatedAt: 5,
+  });
+  provider.emit(finished, session('bbbbbb'));
+  assert.equal(notices.length, 0);
+  assert.equal(service.snapshot().state.groups.length, 2);
+  assert.deepEqual(service.snapshot().state.sessions[finished.id], finished);
+  service.stop();
+  provider = new FakeProvider();
+  service = new MonitorService(new MonitorStore(database), [provider], (n) => notices.push(n));
+  await service.start();
+  provider.emit(finished, session('bbbbbb'));
+  assert.deepEqual(service.snapshot().state.groups, [{ ...a, archived: true }, b]);
+  service.command({ type: 'restore', groupId: a.id });
+  provider.emit(finished);
+  assert.equal(notices.length, 0);
+  assert.deepEqual(service.snapshot().state.groups, [a, b]);
+  provider.emit(session('aaaaaa'));
+  provider.emit({ ...finished, attentionKey: 'result:after-restore' });
+  assert.equal(notices.length, 1);
 });

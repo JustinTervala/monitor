@@ -24,6 +24,8 @@ export interface TaskGroup {
   name: string | null;
   projectOverride: string | null;
   sessionIds: string[];
+  /** Monitor-only archive; independent of each source session's archived flag. */
+  archived: boolean;
   /** null = active; {until:null} = snoozed until explicitly restored. */
   snooze: { until: number | null } | null;
 }
@@ -55,6 +57,8 @@ export type Command =
   | { type: 'move'; groupId: string; targetId: string; placement: 'before' | 'after' }
   | { type: 'snooze'; groupId: string; until: number | null }
   | { type: 'unsnooze'; groupId: string }
+  | { type: 'archive'; groupId: string }
+  | { type: 'restore'; groupId: string }
   | { type: 'detach'; groupId: string; sessionId: string }
   | { type: 'notifications'; enabled: boolean };
 

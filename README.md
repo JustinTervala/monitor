@@ -33,6 +33,8 @@ The renderer reloads during development. Restart `npm run dev` after changing ma
 - **Edit group** changes its name or project tag. **Detach** splits out a member. Use group snoozing to put a workstream aside.
 - Existing groups, names, snoozes, and priority survive discovery and upgrades. Newly discovered tasks start as single-task rows at the end of your saved priority order.
 - Snooze the whole workstream for an hour, until tomorrow at 9 AM local time, or until restored. Members keep executing and notifications pause.
+- **Archive workstream** moves the whole group to the separate **Archived** page. Browse collapsible projects with workstreams sorted by their latest task activity, or search by name, task, or directory. Archiving is local to Monitor; Codex stays unchanged.
+- Archived groups keep their names, membership, and saved priority. Notifications pause and new activity stays archived. **Restore to queue** returns the group at its saved priority using current task states, without replaying past notifications. Archiving clears any previous snooze.
 
 Section precedence is **Needs review → Running → Status unavailable → Read**; Snoozed overrides placement. Relative priority remains stable across all these states. There is no task-status editor. Codex owns execution state and read receipts.
 
@@ -65,6 +67,6 @@ npm run probe:codex  # Read-only live probe of all discovered local tasks
 npm run probe:codex -- TASK_ID
 ```
 
-The smoke test creates temporary source and Monitor databases; it does not edit your real queue. Its screenshot is saved to `.runtime/smoke.png`.
+The smoke test creates temporary source and Monitor databases; it does not edit your real queue. Screenshots are saved to `.runtime/smoke.png` and `.runtime/archive-smoke.png`.
 
 See [architecture](docs/architecture.md), [product behavior](docs/product-spec.md), [Codex integration](docs/codex-integration.md), and the [Claude handoff](docs/claude-handoff.md).

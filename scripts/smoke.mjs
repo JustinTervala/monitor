@@ -14,10 +14,11 @@ const db = new DatabaseSync(join(home, 'state_5.sqlite'));
 db.exec(
   'CREATE TABLE threads(id TEXT PRIMARY KEY,title TEXT,cwd TEXT,source TEXT,archived INTEGER,updated_at INTEGER)',
 );
+const now = Math.floor(Date.now() / 1000);
 for (const [id, title, cwd, updated] of [
-  ['aaaaaa', 'Build the billing rollout', '/work/payments', 3],
-  ['bbbbbb', 'Review the billing changes', '/work/payments', 2],
-  ['cccccc', 'Investigate streaming playback', '/work/media', 1],
+  ['aaaaaa', 'Build the billing rollout', '/work/payments', now - 86400],
+  ['bbbbbb', 'Review the billing changes', '/work/payments', now - 172800],
+  ['cccccc', 'Investigate streaming playback', '/work/media', now - 604800],
 ])
   db.prepare("INSERT INTO threads VALUES(?,?,?,'cli',0,?)").run(id, title, cwd, updated);
 db.close();
@@ -136,9 +137,12 @@ try {
   assert.equal(await page.getByRole('button', { name: 'Remove from Monitor' }).count(), 0);
   // A task created after startup appears and is followed without user action.
   const updatedCatalog = new DatabaseSync(join(home, 'state_5.sqlite'));
-  updatedCatalog.exec(
-    "INSERT INTO threads VALUES('dddddd','A newly created task','/work/project','cli',0,100)",
-  );
+  updatedCatalog
+    .prepare(
+      "INSERT INTO threads VALUES('dddddd','A newly created task','/work/payments','cli',0,?)",
+    )
+    .run(now);
+  const sourceBeforeArchive = updatedCatalog.prepare('SELECT * FROM threads ORDER BY id').all();
   updatedCatalog.close();
   await page.waitForFunction(
     async () => {
@@ -168,6 +172,69 @@ try {
   );
   mkdirSync('.runtime', { recursive: true });
   await page.screenshot({ path: '.runtime/smoke.png' });
+  await page.getByRole('button', { name: 'Archive workstream', exact: true }).click();
+  await page.getByRole('button', { name: 'Archive A newly created task', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Archive Investigate streaming playback', exact: true })
+    .click();
+  await page.getByRole('heading', { name: 'Your queue is clear.' }).waitFor();
+  assert.equal(await page.getByTestId('group-row').count(), 0);
+  await page.getByRole('button', { name: /^Archived / }).click();
+  await page.getByRole('heading', { name: 'Archived.', exact: true }).waitFor();
+  assert.equal(await page.getByTestId('archive-project').count(), 2);
+  const archiveNames = () =>
+    page
+      .getByTestId('archive-row')
+      .locator('.row-name')
+      .evaluateAll((elements) => elements.map((e) => e.firstChild.textContent));
+  assert.deepEqual(await archiveNames(), [
+    'A newly created task',
+    'Billing rollout',
+    'Investigate streaming playback',
+  ]);
+  const payments = page.getByRole('button', { name: /payments.*\/work\/payments/ });
+  await payments.click();
+  assert.equal(await page.getByTestId('archive-row').filter({ visible: true }).count(), 1);
+  await page.getByRole('textbox', { name: 'Filter workstreams' }).fill('billing');
+  assert.equal(await page.getByTestId('archive-row').filter({ visible: true }).count(), 1);
+  assert.deepEqual(await archiveNames(), ['Billing rollout']);
+  await page.getByRole('textbox', { name: 'Filter workstreams' }).fill('no-matching-workstream');
+  await page.getByRole('heading', { name: 'No matching workstreams' }).waitFor();
+  await page.getByRole('textbox', { name: 'Filter workstreams' }).fill('');
+  await payments.click();
+  await page
+    .getByTestId('archive-row')
+    .filter({ hasText: 'Billing rollout' })
+    .locator('.row-select')
+    .click();
+  assert.equal(await page.getByTestId('session-card').count(), 2);
+  assert.equal(await page.getByRole('combobox').count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Increase priority' }).count(), 0);
+  await page.getByRole('button', { name: 'Open in Codex ↗', exact: true }).first().click();
+  assert.equal((await app.evaluate(() => globalThis.monitorOpened)).length, 2);
+  await page.screenshot({ path: '.runtime/archive-smoke.png' });
+  // Restoring derives live section and returns to the original priority slot.
+  await page.getByRole('button', { name: 'Restore to queue', exact: true }).click();
+  await page.getByRole('heading', { name: 'Your queue.' }).waitFor();
+  assert.equal(
+    await page
+      .getByRole('region', { name: 'Needs review', exact: true })
+      .getByTestId('group-row')
+      .count(),
+    1,
+  );
+  assert.equal(await page.getByRole('button', { name: 'Increase priority' }).isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Decrease priority' }).isDisabled(), true);
+  const restored = await page.evaluate(() => window.monitor.snapshot());
+  assert.deepEqual(restored.state.groups[1], discovered.state.groups[1]);
+  await page.getByRole('button', { name: 'Archive workstream', exact: true }).click();
+  await page.getByRole('heading', { name: 'Your queue is clear.' }).waitFor();
+  const sourceAfterArchive = new DatabaseSync(join(home, 'state_5.sqlite'), { readOnly: true });
+  assert.deepEqual(
+    sourceAfterArchive.prepare('SELECT * FROM threads ORDER BY id').all(),
+    sourceBeforeArchive,
+  );
+  sourceAfterArchive.close();
   assert.deepEqual(errors, []);
   await app.close();
   app = undefined;
@@ -177,8 +244,21 @@ try {
   const persisted = await reopened.evaluate(() => window.monitor.snapshot());
   assert.equal(persisted.state.groups.length, 3);
   assert.equal(persisted.state.groups[1].name, 'Billing rollout');
+  assert.ok(persisted.state.groups.every((group) => group.archived));
+  assert.equal(await reopened.getByTestId('group-row').count(), 0);
+  await reopened.getByRole('button', { name: /^Archived / }).click();
+  await reopened
+    .getByRole('button', { name: 'Restore A newly created task to queue', exact: true })
+    .click();
+  await reopened
+    .getByTestId('archive-row')
+    .filter({ hasText: 'A newly created task' })
+    .waitFor({ state: 'hidden' });
+  assert.equal(await reopened.getByTestId('archive-row').count(), 2);
+  await reopened.getByRole('button', { name: /^Queue / }).click();
+  await reopened.getByTestId('group-row').filter({ hasText: 'A newly created task' }).waitFor();
   console.log(
-    'Electron smoke passed: automatic discovery at startup and during execution, UI grouping, editing, snoozing, priority, session URL, persistence. Screenshot: .runtime/smoke.png',
+    'Electron smoke passed: discovery, grouping, editing, snoozing, priority, project/recency archive, search, collapse, restore, source immutability, session URL, persistence. Screenshots: .runtime/smoke.png and .runtime/archive-smoke.png',
   );
 } finally {
   await app?.close();

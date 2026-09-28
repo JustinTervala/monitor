@@ -12,7 +12,7 @@ Monitor helps the user schedule attention while preserving the existing harnesse
 
 All non-archived tasks discovered from the source apps appear automatically, both on startup and as new tasks are created. No manual import or Add Task control is needed. Existing memberships, group names, snoozes, and priority remain unchanged; newly discovered tasks append to the global order. Previously unimported tasks from older Monitor versions are included on the next discovery pass. Existing group members remain organized even if later archived in the source app.
 
-Every task belongs to one queue entry. A standalone task appears as a single-task entry. Dragging one task onto another starts group creation and asks for a manually created name. A named group can contain sessions from both harnesses.
+Every admitted task belongs to one workstream, either in the queue or archive. A standalone task appears as a single-task entry. Dragging one task onto another starts group creation and asks for a manually created name. A named group can contain sessions from both harnesses.
 
 Each group appears exactly once in the queue, as a single row. Selecting the row reveals its individual sessions and their observed states in a detail view. Group membership never causes tasks to be duplicated across queue sections.
 
@@ -79,7 +79,21 @@ While a group is snoozed:
 
 On expiry or explicit unsnooze, derive the group's section from its current task states and reinsert it using saved priority. Never restore a stale pre-snooze section.
 
-The concept supports one hour, tomorrow morning, or until explicitly unsnoozed. Merging retains the drop target’s snooze policy, made explicit in the naming dialog. Detaching creates an active singleton immediately after the original group.
+The concept supports one hour, tomorrow morning, or until explicitly unsnoozed. Merging retains the drop target’s snooze policy, made explicit in the naming dialog. Detaching a queue member creates an active singleton immediately after the original group.
+
+## Archive
+
+**Archived** is a separate page, organized by collapsible project sections. Archive a whole workstream using its row action or detail pane. This is a Monitor-only decision: source tasks remain unchanged, including their execution state and source archive flags. Existing queues remain active on upgrade; unavailable or old tasks are never automatically archived.
+
+- Archived workstreams keep one row, their names, membership, project overrides, and saved global priority. They are excluded from queue sections and attention counts.
+- Use full normalized source paths for project identity, displaying the leaf name and full path. Different paths with the same leaf stay separate. Manual project overrides group by their exact label; mixed and unknown projects have their own sections.
+- Within each project, sort by the latest member task's source `updatedAt`, newest first. Project sections also sort by their newest activity. Observation time and archive time do not change this ordering.
+- Search matches workstream names, task titles, project tags, and source directories. Matching sections expand while searching.
+- Observation continues, but Monitor notifications are muted. New results do not return a workstream to the queue or create duplicate entries.
+- Archiving clears any snooze. Restoring returns the group to its saved priority and current state, without replaying old notifications. Queue priority controls skip archived entries.
+- Names, projects, task links, and detaching remain available in the archive. A detached member stays archived. Restore before merging, reordering, or snoozing.
+
+Monitor's archive is independent of the source catalog's archive filter. Previously untracked source-archived tasks are not imported by this page. A previously admitted task remains in its existing Monitor workstream if later archived in the source app.
 
 ## Notifications and navigation
 
@@ -93,7 +107,7 @@ Snoozing controls Monitor's notifications. Managing duplicate notifications from
 
 - Implemented: rename groups and override or clear project tags.
 - Implemented: merge groups and detach members. Use group snoozing to defer work; there is no manual tracking or removal toggle.
-- Archive completed workstreams without deleting their source sessions.
+- Implemented: archive whole workstreams locally, browse by project and recency, and restore without deleting or archiving source sessions.
 - Improve keyboard access, drag affordances, and detail-pane layout.
 - Attach handoff documents and PR references.
 - Track PR-stack dependencies separately from attention priority.

@@ -26,6 +26,8 @@ export class MonitorStore {
       throw new Error('Monitor database format is not supported. Your data has been preserved.');
     // Older releases seeded only 20 tasks once. Admission is now continuous.
     delete value.initialized;
+    // Existing workstreams stay in the queue on upgrade.
+    for (const group of value.groups) group.archived ??= false;
     return value as MonitorState;
   }
   write(state: MonitorState) {

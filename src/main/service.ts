@@ -86,7 +86,13 @@ export class MonitorService extends EventEmitter {
       // must not replay old completions when they are lifted.
       this.state.notificationKeys[session.id] = key;
       const group = this.state.groups.find((g) => g.sessionIds.includes(session.id));
-      if (!firstObservation && this.state.notifications && group && !isSnoozed(group)) {
+      if (
+        !firstObservation &&
+        this.state.notifications &&
+        group &&
+        !group.archived &&
+        !isSnoozed(group)
+      ) {
         // Persist the receipt before emitting the OS side effect (at-most-once).
         this.store.write(this.state);
         this.notify({
