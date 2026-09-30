@@ -16,6 +16,7 @@
     "test": "node --import tsx --test tests/*.test.ts",
     "check": "npm run typecheck && npm test && npm run build",
     "probe:codex": "node --import tsx scripts/probe-codex.ts",
+    "probe:claude": "node --import tsx scripts/probe-claude.ts",
     "smoke": "node scripts/smoke.mjs",
     "package:mac": "npm run build && node scripts/package.mjs",
     "format": "prettier --write ."

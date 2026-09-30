@@ -252,3 +252,43 @@ test('archive persists, keeps observing without rediscovery or notifications, an
   provider.emit({ ...finished, attentionKey: 'result:after-restore' });
   assert.equal(notices.length, 1);
 });
+
+test('a Claude result in a snoozed or archived mixed-provider group updates quietly', async (t) => {
+  const path = mkdtempSync(join(tmpdir(), 'monitor-test-'));
+  const codex = new FakeProvider('codex'),
+    claude = new FakeProvider('claude'),
+    notices: NotificationEvent[] = [];
+  const service = new MonitorService(
+    new MonitorStore(join(path, 'state.sqlite')),
+    [codex, claude],
+    (n) => notices.push(n),
+  );
+  t.after(() => {
+    service.stop();
+    rmSync(path, { recursive: true });
+  });
+  const claudeSession = (extra: Partial<Session> = {}) =>
+    session('local_x', { id: 'claude:local_x', provider: 'claude', ...extra });
+  await service.start();
+  codex.emit(session('aaaaaa'));
+  claude.emit(claudeSession());
+  const [a, b] = service.snapshot().state.groups;
+  service.command({ type: 'merge', sourceId: b.id, targetId: a.id, name: 'Billing' });
+  assert.deepEqual(claude.tracked, ['local_x']);
+  const group = service.snapshot().state.groups[0];
+  service.command({ type: 'snooze', groupId: group.id, until: null });
+  claude.emit(claudeSession({ status: 'review', attentionKey: 'result:snoozed' }));
+  assert.equal(service.snapshot().state.sessions['claude:local_x'].status, 'review');
+  service.command({ type: 'unsnooze', groupId: group.id });
+  service.command({ type: 'archive', groupId: group.id });
+  claude.emit(claudeSession());
+  claude.emit(claudeSession({ status: 'read', attentionKey: 'result:archived' }));
+  assert.equal(service.snapshot().state.sessions['claude:local_x'].status, 'read');
+  assert.equal(notices.length, 0);
+  service.command({ type: 'restore', groupId: group.id });
+  claude.emit(claudeSession());
+  claude.emit(claudeSession({ status: 'review', attentionKey: 'result:active' }));
+  assert.equal(notices.length, 1);
+  assert.equal(notices[0].title, 'Billing');
+  assert.match(notices[0].body, /^Claude · /);
+});

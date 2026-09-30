@@ -83,7 +83,14 @@ const server = createServer((socket) => {
   });
 });
 await new Promise((resolve) => server.listen(join(home, 'ipc', 'ipc.sock'), resolve));
-const env = { ...process.env, CODEX_HOME: home, MONITOR_DATA_DIR: join(root, 'monitor') };
+const env = {
+  ...process.env,
+  CODEX_HOME: home,
+  MONITOR_DATA_DIR: join(root, 'monitor'),
+  // Isolate from the real Claude desktop store; Claude is covered by its adapter tests.
+  MONITOR_CLAUDE_DESKTOP_DIR: join(root, 'claude-desktop'),
+  CLAUDE_CONFIG_DIR: join(root, 'claude-config'),
+};
 delete env.ELECTRON_RUN_AS_NODE;
 delete env.MONITOR_DEV_URL;
 let app;

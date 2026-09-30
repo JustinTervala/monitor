@@ -14,6 +14,7 @@ import { MonitorStore } from './store';
 import { MonitorService } from './service';
 import { commandSchema } from './commands';
 import { CodexProvider } from '../providers/codex';
+import { ClaudeProvider } from '../providers/claude';
 
 app.setName('Monitor');
 if (process.env.MONITOR_DATA_DIR) app.setPath('userData', process.env.MONITOR_DATA_DIR);
@@ -57,6 +58,11 @@ async function openSession(id: string) {
   const parsed = new URL(url);
   if (!['codex:', 'claude:'].includes(parsed.protocol))
     throw new Error('Unsupported session destination.');
+  if (
+    parsed.protocol === 'claude:' &&
+    !/^claude:\/\/code\/continue\?session=local_[A-Za-z0-9-]{1,64}$/.test(url)
+  )
+    throw new Error('Unsupported Claude session destination.');
   await shell.openExternal(url);
 }
 async function showWindow() {
@@ -112,7 +118,10 @@ if (gotLock)
     .then(async () => {
       service = new MonitorService(
         new MonitorStore(join(app.getPath('userData'), 'monitor.sqlite')),
-        [new CodexProvider()],
+        [
+          new CodexProvider(),
+          new ClaudeProvider({ desktopDir: process.env.MONITOR_CLAUDE_DESKTOP_DIR }),
+        ],
         (event) => {
           if (!Notification.isSupported()) return;
           const notification = new Notification({ title: event.title, body: event.body });

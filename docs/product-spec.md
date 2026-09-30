@@ -1,6 +1,6 @@
 # Product specification
 
-Status: implemented for local Codex desktop sessions; Claude integration remains a separate adapter task.
+Status: implemented for local Codex desktop tasks and Claude desktop Code-tab sessions ([Claude integration](claude-integration.md)).
 
 ## Workflow
 
@@ -36,7 +36,7 @@ For a group that is not snoozed, the highest section represented by any member d
 
 Example: a group containing a review task, a running task, and a read task appears only in Needs review. After the review item is acknowledged, the group moves to Running. The group's identity and saved priority are unchanged.
 
-Task states are read-only in Monitor. There is no per-task status dropdown. Runtime state comes from the harness. Read/acknowledgment is separate from execution state; Codex supplies the authoritative read receipt. Opening and reading the task in Codex updates Monitor.
+Task states are read-only in Monitor. There is no per-task status dropdown. Runtime state comes from the harness. Read/acknowledgment is separate from execution state; Codex supplies the authoritative read receipt. Opening and reading the task in Codex updates Monitor. Claude exposes no readable receipt; opening the session in Claude after its result is used as acknowledgment instead.
 
 Waiting for approval, waiting for input, errors, and disconnected observers must remain distinguishable in the task details. An observer losing contact is not evidence of task completion. Unknown state has its own section between Running and Read.
 
@@ -114,8 +114,6 @@ Snoozing controls Monitor's notifications. Managing duplicate notifications from
 
 ## Integration questions
 
-- Which Claude sessions are Code tasks, ordinary chats, or a mix?
-- What stable observer and exact-session navigation mechanisms exist for the installed app versions?
-- Can the source apps provide reliable read receipts?
+- Answered for Claude: only desktop Code-tab sessions are local and observable; ordinary chats are not represented. Exact navigation uses `claude://code/continue?session=`. Claude has no readable read receipt; see [Claude integration](claude-integration.md).
 - How should unknown/disconnected state be surfaced without claiming a task is running or complete?
 - What does notification batching look like when several tasks in a group finish close together?

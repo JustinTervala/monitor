@@ -1,5 +1,7 @@
 # Claude adapter handoff
 
+> Implemented in `src/providers/claude/`. See [Claude integration](claude-integration.md) for findings, state mapping, limitations, and verification.
+
 Implement Claude's side of Monitor while keeping the user's existing Claude harnesses. Codex support, scheduling policy, persistence, notifications, and the Electron UI already exist.
 
 ## Read first
