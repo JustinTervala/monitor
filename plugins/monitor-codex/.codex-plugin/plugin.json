@@ -1,0 +1,17 @@
+{
+  "name": "monitor-codex",
+  "version": "0.2.0",
+  "description": "Local lifecycle observations for the Monitor desktop app",
+  "author": {
+    "name": "Justin Tervala"
+  },
+  "interface": {
+    "displayName": "Monitor Codex",
+    "shortDescription": "Watch Codex activity in Monitor.",
+    "longDescription": "Records local task and turn identifiers and lifecycle events for Monitor. No prompts, responses, or tool arguments are saved.",
+    "developerName": "Justin Tervala",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Help me check my local Monitor integration."
+  }
+}

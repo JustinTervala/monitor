@@ -4,10 +4,12 @@ import type { SessionProvider, ObserverCallbacks } from '../provider';
 import type { Session } from '../../shared/types';
 import { readCatalog, validThreadId } from './catalog';
 import { CodexTransport } from './transport';
+import { defaultHooksDirectory, readHookRecords, sessionFromHooks, type HookRecord } from './hooks';
 import {
   projectConversation,
   patchProjection,
   sessionFromProjection,
+  latestTurn,
   type Projection,
 } from './projection';
 
@@ -23,11 +25,17 @@ export class CodexProvider implements SessionProvider {
   private lastObservedAt: number | null = null;
   private resyncTimes = new Map<string, number>();
   private protocolError: string | null = null;
-  constructor(readonly home = process.env.CODEX_HOME || join(homedir(), '.codex')) {
+  private hookRecords = new Map<string, HookRecord>();
+  private startedAt = Date.now();
+  constructor(
+    readonly home = process.env.CODEX_HOME || join(homedir(), '.codex'),
+    readonly hooksDirectory = defaultHooksDirectory(),
+  ) {
     this.transport = new CodexTransport(join(home, 'ipc', 'ipc.sock'));
   }
   async start(callbacks: ObserverCallbacks) {
     this.callbacks = callbacks;
+    this.startedAt = Date.now();
     callbacks.health({
       provider: this.id,
       state: 'connecting',
@@ -37,25 +45,28 @@ export class CodexProvider implements SessionProvider {
     await this.refresh();
     this.transport.on('ready', () => {
       this.connected = true;
-      this.health('live', 'Connected to Codex desktop · local sessions');
+      this.reportHealth();
     });
     this.transport.on('offline', (message: string) => {
       this.connected = false;
       this.live.clear();
       for (const [id, s] of this.sessions)
-        this.sessions.set(id, {
-          ...s,
-          status: 'unknown',
-          evidence: 'unavailable',
-          attentionKey: null,
-          detail: 'Codex desktop disconnected; last known state is not current',
-        });
+        this.sessions.set(
+          id,
+          this.withHooks({
+            ...s,
+            status: 'unknown',
+            evidence: 'unavailable',
+            attentionKey: null,
+            detail: 'Codex desktop disconnected; last known state is not current',
+          }),
+        );
       this.publish();
-      this.health('offline', message);
+      this.reportHealth(message);
     });
     this.transport.on('message', (message) => this.handleMessage(message));
     this.transport.start();
-    this.timer = setInterval(() => void this.refresh(), 5000);
+    this.timer = setInterval(() => void this.refresh(), 1000);
   }
   private health(state: 'live' | 'offline' | 'degraded', message: string) {
     this.callbacks?.health({
@@ -68,19 +79,57 @@ export class CodexProvider implements SessionProvider {
   private publish() {
     this.callbacks?.sessions([...this.sessions.values()]);
   }
+  private withHooks(session: Session, projection?: Projection) {
+    const record = this.hookRecords.get(session.externalId);
+    const event = record?.activity?.turnId ? record.activity : record?.completion;
+    const turn = projection && latestTurn(projection);
+    const oldIdleTurn =
+      projection &&
+      ['idle', 'notLoaded'].includes(projection.threadRuntimeStatus?.type || '') &&
+      !projection.requests?.length &&
+      !projection.threadRuntimeStatus?.activeFlags?.length &&
+      event?.turnId &&
+      event.turnId !== (turn?.turnId || turn?.id) &&
+      event.at > (Number(turn?.turnStartedAtMs) || 0);
+    // A desktop receipt for an older turn cannot acknowledge newer CLI/plugin work.
+    return session.status === 'unknown' || oldIdleTurn
+      ? sessionFromHooks(
+          { ...session, status: 'unknown', evidence: 'unavailable', attentionKey: null },
+          record,
+          this.startedAt,
+        )
+      : session;
+  }
+  private reportHealth(offlineMessage = 'Codex desktop disconnected') {
+    const hasHooks = [...this.sessions.values()].some((s) => {
+      const record = this.hookRecords.get(s.externalId);
+      return record?.activity || record?.completion;
+    });
+    if (this.connected && !this.protocolError) {
+      this.health(
+        'live',
+        `Connected to Codex desktop${hasHooks ? ' · companion observations available' : ''}`,
+      );
+    } else {
+      this.health(
+        hasHooks ? 'degraded' : 'offline',
+        `${this.protocolError || offlineMessage}${hasHooks ? ' · using companion observations; read receipts unavailable' : ''}`,
+      );
+    }
+  }
   async refresh() {
     try {
+      this.hookRecords = readHookRecords(this.hooksDirectory);
       const rows = readCatalog(this.home, this.tracked);
       for (const row of rows) {
         const live = this.live.get(row.externalId);
-        this.sessions.set(row.externalId, live ? sessionFromProjection(row, live.state) : row);
+        this.sessions.set(
+          row.externalId,
+          this.withHooks(live ? sessionFromProjection(row, live.state) : row, live?.state),
+        );
       }
       this.publish();
-      if (this.connected)
-        this.health(
-          this.protocolError ? 'degraded' : 'live',
-          this.protocolError || 'Connected to Codex desktop · local sessions',
-        );
+      this.reportHealth();
     } catch (error) {
       this.health('degraded', error instanceof Error ? error.message : String(error));
     }
@@ -94,13 +143,16 @@ export class CodexProvider implements SessionProvider {
     this.live.delete(id);
     const session = this.sessions.get(id);
     if (session) {
-      this.sessions.set(id, {
-        ...session,
-        status: 'unknown',
-        evidence: 'unavailable',
-        attentionKey: null,
-        detail: message,
-      });
+      this.sessions.set(
+        id,
+        this.withHooks({
+          ...session,
+          status: 'unknown',
+          evidence: 'unavailable',
+          attentionKey: null,
+          detail: message,
+        }),
+      );
       this.publish();
     }
   }
@@ -177,7 +229,10 @@ export class CodexProvider implements SessionProvider {
     const base = this.sessions.get(id);
     if (!base) return;
     this.lastObservedAt = Date.now();
-    this.sessions.set(id, sessionFromProjection(base, live.state, this.lastObservedAt));
+    this.sessions.set(
+      id,
+      this.withHooks(sessionFromProjection(base, live.state, this.lastObservedAt), live.state),
+    );
     this.publish();
   }
   sessionUrl(externalId: string) {

@@ -101,17 +101,21 @@ export function patchProjection(state: Projection, raw: unknown): Projection {
   return applyPatches(state, patches);
 }
 
-export function sessionFromProjection(base: Session, state: Projection, now = Date.now()): Session {
-  const runtime = state.threadRuntimeStatus;
-  const flags = runtime?.activeFlags || [];
-  const request = state.requests?.[0];
+export function latestTurn(state: Projection) {
   const turns = [
     ...(state.turns || []),
     ...Object.values(state.turnHistory?.history?.entitiesByKey || {}),
   ];
-  const latest = turns
+  return turns
     .sort((a, b) => (Number(a.turnStartedAtMs) || 0) - (Number(b.turnStartedAtMs) || 0))
     .at(-1);
+}
+
+export function sessionFromProjection(base: Session, state: Projection, now = Date.now()): Session {
+  const runtime = state.threadRuntimeStatus;
+  const flags = runtime?.activeFlags || [];
+  const request = state.requests?.[0];
+  const latest = latestTurn(state);
   const turnId = latest?.turnId || latest?.id;
   let status: Session['status'] = 'unknown',
     detail = 'Codex has not reported a supported runtime state.',

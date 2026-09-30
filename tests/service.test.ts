@@ -101,6 +101,50 @@ test('every discovered task is admitted automatically, including later provider 
   assert.equal(notices.length, 1); // Initial historical completion remains quiet.
 });
 
+test('hook history is quiet, a later completion notifies once across hook and desktop channels', async (t) => {
+  const path = mkdtempSync(join(tmpdir(), 'monitor-hooks-service-'));
+  const provider = new FakeProvider(),
+    notices: NotificationEvent[] = [];
+  const service = new MonitorService(
+    new MonitorStore(join(path, 'state.sqlite')),
+    [provider],
+    (n) => notices.push(n),
+  );
+  t.after(() => {
+    service.stop();
+    rmSync(path, { recursive: true });
+  });
+  await service.start();
+  provider.emit(
+    session('aaaaaa', { status: 'review', evidence: 'history', attentionKey: 'result:old' }),
+  );
+  assert.equal(notices.length, 0);
+  assert.equal(service.snapshot().state.notificationKeys['codex:aaaaaa'], 'result:old');
+  // A fast turn can finish between polls; history still establishes the baseline.
+  provider.emit(session('aaaaaa', { status: 'review', attentionKey: 'result:new' }));
+  assert.equal(notices.length, 1);
+  provider.emit(
+    session('aaaaaa', { status: 'read', attentionKey: 'result:new', detail: 'Read in Codex' }),
+  );
+  assert.equal(notices.length, 1);
+  provider.emit(session('aaaaaa'));
+  provider.emit(
+    session('aaaaaa', {
+      status: 'unknown',
+      evidence: 'unavailable',
+      detail: 'Stop hook; no confirmed result',
+    }),
+  );
+  provider.callbacks.health({
+    provider: 'codex',
+    state: 'degraded',
+    message: 'Using companion observations',
+    lastObservedAt: null,
+  });
+  provider.emit(session('aaaaaa', { status: 'review', attentionKey: 'result:next' }));
+  assert.equal(notices.length, 2);
+});
+
 test('upgrading an already initialized queue discovers omissions without resetting workstreams', async (t) => {
   const path = mkdtempSync(join(tmpdir(), 'monitor-test-'));
   const store = new MonitorStore(join(path, 'state.sqlite'));

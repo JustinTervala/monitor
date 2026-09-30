@@ -41,9 +41,25 @@ claude plugin install monitor-hooks@monitor
 
 It records session ids, timings and directories only, never prompts or responses. Terminal tasks offer **Show in iTerm** (jumps to the tab running the session) or, after it exits, **Resume in iTerm** (new tab running `claude --resume`). **Copy resume command** works for any Claude task. The first use asks macOS for permission to control iTerm2.
 
+### Codex companion integration
+
+Use the current Codex desktop app and CLI, plus Python 3.11 or newer. From this repository, run:
+
+```sh
+python3 scripts/install-codex.py
+```
+
+If the CLI on your PATH is older than the one in your desktop app, pass its path explicitly, for example `python3 scripts/install-codex.py --codex /Applications/ChatGPT.app/Contents/Resources/codex`.
+
+The installer adds **monitor-codex** to your personal plugin marketplace, installs it, and connects Codex's completion callback. Any existing callback is preserved and forwarded to once. Restart Codex, then review and trust the Monitor hooks in `/hooks` in the CLI (or the desktop hook review UI). Start or resume a task after trusting them. The installer never grants hook trust. No account or API key is needed for Monitor.
+
+Hooks report recent activity and interruptions; the separate completion callback confirms finished turns. Desktop state supplies approvals and read receipts. If desktop state is unavailable, a confirmed result appears in **Needs review** with **read receipt unavailable**; opening the task lets the desktop provide its actual receipt. A `Stop` hook alone never counts as completion. Activity without a fresh event expires after two minutes instead of appearing to run forever.
+
+After updating this checkout, rerun the installer and restart Codex. Remove the integration with `python3 scripts/install-codex.py --uninstall`; it restores your previous completion callback if Monitor still owns that setting. Your workstreams and recorded metadata stay intact. See [companion integration](docs/codex-companion.md) for details and verification limits.
+
 ## Use
 
-- All non-archived tasks in the local Codex catalog and Claude Code tab appear automatically, including tasks created while Monitor is running. There is no import step or task-count limit. Discovery refreshes every five seconds.
+- All non-archived tasks in the local Codex catalog and Claude Code tab appear automatically, including tasks created while Monitor is running. There is no import step or task-count limit. Codex discovery refreshes every second; Claude every three seconds.
 - Select a row to inspect its tasks. **Open in Codex** / **Open in Claude** opens that exact task.
 - Drag a row onto another row and name the combined workstream. One group occupies one row.
 - Drag the **⠿ handle** to reorder. The **Priority** view shows the global order across sections; arrow buttons in details provide keyboard-accessible ordering.
@@ -67,15 +83,17 @@ Initial snapshots and reconnection backlogs are quiet. Result/request identities
 
 ## Integration limits
 
-This release observes **local Codex desktop sessions**, not cloud/remote tasks or arbitrary CLI processes. It reads catalog metadata from Codex's SQLite database and subscribes as a non-owning follower to the desktop's local IPC stream. It never resumes tasks, sends prompts, answers approvals, or changes Codex settings.
+This release observes **local Codex tasks**, not cloud/remote tasks. The companion also covers local CLI tasks in the same catalog; exact navigation opens them in the desktop app. It reads catalog metadata from Codex's SQLite database and subscribes as a non-owning follower to the desktop's local IPC stream. Monitor never resumes Codex tasks, sends prompts, or answers approvals. Only the explicit companion installer changes Codex settings.
 
 For Claude, Monitor reads the desktop's Code-session records and the Claude Code process registry (`~/.claude/sessions`). It does not install hooks or change Claude settings. See [Claude integration](docs/claude-integration.md) for the state mapping and limits.
 
-The desktop observer protocol is **internal**, tested against desktop `26.903.61454`, stream version `11`. It may change with app updates. Unsupported or disconnected state becomes **Status unavailable**, never an invented completion. A catalog entry alone is insufficient to know whether a task is running; open it in Codex if no desktop window currently supplies live state.
+The desktop observer protocol is **internal**, tested against desktop `26.903.61454`, stream version `11`. It may change with app updates. Supported companion observations fill gaps; otherwise unsupported or disconnected state becomes **Status unavailable**, never an invented completion. A catalog entry alone is insufficient to know whether a task is running; open it in Codex if no desktop window currently supplies live state.
 
 Codex's socket sends conversation snapshots. The adapter immediately reduces them to metadata, runtime state, and result/request identities. Prompts, responses, and tool payloads are not persisted or sent to the renderer. Monitor's own state lives in its Electron user-data directory in `monitor.sqlite`.
 
 ## Development
+
+Monitor is a personal app targeting current dependencies and source apps. Upgrades may require reinstalling integrations or updating tools; old versions and configuration formats are not compatibility targets. Personal workstream data is preserved.
 
 Stack: **Electron + React + TypeScript + Vite + SQLite** (`node:sqlite`).
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createServer, type Socket } from 'node:net';
@@ -77,7 +77,7 @@ test('desktop observer follows, applies ordered patches, resyncs gaps and never 
     });
   });
   await new Promise<void>((resolve) => server.listen(join(home, 'ipc', 'ipc.sock'), resolve));
-  const provider = new CodexProvider(home);
+  const provider = new CodexProvider(home, join(home, 'hooks'));
   let sessions: Session[] = [];
   t.after(async () => {
     provider.stop();
@@ -125,6 +125,25 @@ test('desktop observer follows, applies ordered patches, resyncs gaps and never 
     },
   });
   await wait(() => sessions[0]?.status === 'running');
+  mkdirSync(join(home, 'hooks'), { mode: 0o700 });
+  const hookFile = join(home, 'hooks', 'aaaaaa.json');
+  writeFileSync(
+    hookFile,
+    JSON.stringify({
+      version: 1,
+      sessionId: 'aaaaaa',
+      completion: {
+        event: 'TurnComplete',
+        turnId: 'turn-older',
+        at: Date.now(),
+      },
+    }),
+    { mode: 0o600 },
+  );
+  await provider.refresh();
+  assert.equal(sessions[0].status, 'running'); // Current desktop state overrides hook history.
+  rmSync(hookFile);
+  await provider.refresh();
   update({
     type: 'patches',
     baseRevision: 1,
@@ -143,6 +162,36 @@ test('desktop observer follows, applies ordered patches, resyncs gaps and never 
     params: { hostId: 'local', threadId: 'aaaaaa', hasUnreadTurn: false },
   });
   await wait(() => sessions[0]?.status === 'read');
+  writeFileSync(
+    hookFile,
+    JSON.stringify({
+      version: 1,
+      sessionId: 'aaaaaa',
+      activity: {
+        event: 'PreToolUse',
+        turnId: 'newturn-1',
+        at: Date.now(),
+      },
+    }),
+    { mode: 0o600 },
+  );
+  await provider.refresh();
+  assert.equal(sessions[0].status, 'running'); // The desktop receipt belongs to an older turn.
+  update({
+    type: 'patches',
+    baseRevision: 2,
+    revision: 3,
+    patches: [
+      {
+        op: 'replace',
+        path: ['turns'],
+        value: [{ turnId: 'newturn-1', status: 'completed', turnStartedAtMs: Date.now() }],
+      },
+    ],
+  });
+  await wait(() => sessions[0]?.status === 'read'); // A receipt for the same turn wins.
+  rmSync(hookFile);
+  await provider.refresh();
   update({ type: 'patches', baseRevision: 5, revision: 6, patches: [] });
   await wait(() => sessions[0]?.status === 'unknown');
   await wait(() =>

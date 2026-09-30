@@ -71,7 +71,7 @@ export class MonitorService extends EventEmitter {
       if (old && JSON.stringify(oldValue) === JSON.stringify(newValue)) continue;
       changed = true;
       this.state.sessions[session.id] = session;
-      if (session.evidence !== 'live') continue;
+      if (session.evidence === 'unavailable') continue;
       const key = session.attentionKey;
       const firstObservation = !this.baselined.has(session.id);
       // An idle snapshot may arrive before its turn history. Do not treat that
@@ -89,6 +89,7 @@ export class MonitorService extends EventEmitter {
       const group = this.state.groups.find((g) => g.sessionIds.includes(session.id));
       if (
         !firstObservation &&
+        session.evidence === 'live' &&
         this.state.notifications &&
         group &&
         !group.archived &&

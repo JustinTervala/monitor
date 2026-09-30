@@ -10,7 +10,7 @@ Official reference: [Codex app-server](https://learn.chatgpt.com/docs/app-server
 
 ## Discovery
 
-Use `CODEX_HOME` or `~/.codex`. Open the highest `state_N.sqlite` read-only with `PRAGMA query_only=ON`. Read validated metadata columns from `threads`: identity, title/name, cwd, source, archived, update time. Discover all nonarchived local entries without a recency/count cutoff and explicitly fetch existing group members that have since been archived. Ignore subagent entries. Update every five seconds.
+Use `CODEX_HOME` or `~/.codex`. Open the highest `state_N.sqlite` read-only with `PRAGMA query_only=ON`. Read validated metadata columns from `threads`: identity, title/name, cwd, source, archived, update time. Discover all nonarchived local entries without a recency/count cutoff and explicitly fetch existing group members that have since been archived. Ignore subagent entries. Update every second. Supported [companion observations](codex-companion.md) fill gaps in desktop state; the desktop remains authoritative when it provides supported runtime state and receipts.
 
 A catalog timestamp is not runtime evidence. Catalog-only tasks remain unavailable.
 

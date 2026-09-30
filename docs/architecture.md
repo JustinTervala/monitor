@@ -3,7 +3,7 @@
 The first implementation uses Electron, React, TypeScript, Vite, and Node's built-in SQLite. All privileged observation runs in the Electron main process. The renderer has a context-isolated, sandboxed preload bridge with validated product commands.
 
 ```text
-Codex catalog + desktop IPC → CodexProvider ─┐
+Codex catalog + IPC + hooks → CodexProvider ─┐
                                            ├→ MonitorService → SQLite
 Claude desktop records    → ClaudeProvider ┘       │
                                                      ├→ native notifications
@@ -15,7 +15,7 @@ Claude desktop records    → ClaudeProvider ┘       │
 - `src/shared/types.ts`: provider-owned Session, user-owned TaskGroup, Snapshot, and command contracts.
 - `src/shared/queue.ts`: pure group precedence, project tags, membership, and ordering operations.
 - `src/providers/provider.ts`: provider contract for observation, tracking, health, and session navigation.
-- `src/providers/codex/`: catalog reader, framed IPC transport, transcript-free projection, ordered patch reconciliation.
+- `src/providers/codex/`: catalog reader, framed IPC transport, transcript-free projection, ordered patch reconciliation, and supported companion observations when desktop state is unavailable.
 - `src/providers/claude/`: desktop Code-session record reader, Claude Code process registry, focus-based acknowledgment projection.
 - `src/main/service.ts`: discovery, tracking, durable user state, snooze timers, and notification deduplication.
 - `src/main/store.ts`: Monitor's SQLite storage. A single versioned JSON document is updated transactionally; a relational schema can follow when query volume warrants it.
@@ -32,7 +32,7 @@ The `groups` array is the persistent total priority order, including archived wo
 
 A merge inherits the higher position and retains the drop target's identity, project override, and snooze policy. Detaching creates a singleton immediately after the source group; it stays archived if its parent was archived. Archived groups must be restored before merging, reordering, or snoozing.
 
-Monitor stores no transcript bodies. On launch, cached session states become unavailable until corroborated by the provider. Groups, order, and snoozes survive restarts. Source files are read-only; only Monitor's own database is written.
+Monitor stores no transcript bodies. On launch, cached session states become unavailable until corroborated by the provider. Groups, order, and snoozes survive restarts. Source files are read-only during observation. Companion hooks also write private metadata records; only the explicit installer updates Codex integration settings.
 
 ## Notifications
 

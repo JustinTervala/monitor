@@ -86,6 +86,7 @@ await new Promise((resolve) => server.listen(join(home, 'ipc', 'ipc.sock'), reso
 const env = {
   ...process.env,
   CODEX_HOME: home,
+  MONITOR_CODEX_HOOKS_DIR: join(root, 'codex-hooks'),
   MONITOR_DATA_DIR: join(root, 'monitor'),
   // Isolate from the real Claude desktop store; Claude is covered by its adapter tests.
   MONITOR_CLAUDE_DESKTOP_DIR: join(root, 'claude-desktop'),
