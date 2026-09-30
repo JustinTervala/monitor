@@ -3,8 +3,10 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } f
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
+import { checkNotices, packageLicenses } from './licenses.mjs';
 
 if (process.platform !== 'darwin') throw new Error('The first Monitor package targets macOS.');
+checkNotices();
 // Sign outside synced folders: macOS file providers can attach FinderInfo to
 // app bundles in Documents even after the attribute has been removed.
 const workspace = mkdtempSync(join(tmpdir(), 'monitor-package-'));
@@ -21,6 +23,7 @@ try {
       version: source.version,
       main: source.main,
       description: source.description,
+      license: source.license,
     }),
   );
   const paths = await packager({
@@ -37,6 +40,7 @@ try {
     prune: false,
   });
   const appPath = join(paths[0], 'Monitor.app');
+  packageLicenses(appPath);
   // Bind the renamed bundle's Info.plist and resources to a complete local
   // signature. This is ad-hoc signing, not notarized distribution.
   execFileSync('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', appPath], {

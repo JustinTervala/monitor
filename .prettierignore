@@ -5,3 +5,4 @@ out
 out.nosync
 .runtime
 package-lock.json
+THIRD_PARTY_NOTICES.md

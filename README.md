@@ -8,7 +8,13 @@ It observes **Codex desktop** tasks and **Claude desktop Code-tab** sessions. Or
 
 Requires macOS, Node 24+, and Codex desktop and/or Claude desktop running with local tasks. No API key or extra agent harness.
 
+Download the Mac app from [GitHub Releases](https://github.com/JustinTervala/monitor/releases). The public repository and downloads do not require a GitHub login. Monitor uses the source apps already configured on that Mac; no Monitor account is needed.
+
+To build from source:
+
 ```sh
+git clone https://github.com/JustinTervala/monitor.git
+cd monitor
 npm ci
 npm run dev
 ```
@@ -74,3 +80,11 @@ npm run probe:claude -- 300 # ...and log state transitions for five minutes
 The smoke test creates temporary source and Monitor databases; it does not edit your real queue. Screenshots are saved to `.runtime/smoke.png` and `.runtime/archive-smoke.png`.
 
 See [architecture](docs/architecture.md), [product behavior](docs/product-spec.md), [Codex integration](docs/codex-integration.md), and [Claude integration](docs/claude-integration.md).
+
+## License
+
+Monitor is licensed under the [MIT license](LICENSE). Copyright and license notices for its runtime dependencies are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Every packaged app includes those notices, Monitor’s and Electron’s license texts, and Electron’s complete `LICENSES.chromium.html` in `Monitor.app/Contents/Resources/licenses/`. In Finder, choose **Show Package Contents** on Monitor.app to browse them.
+
+After changing dependencies, run `npm run licenses` and commit the updated notices. `npm run check` and packaging reject stale notices or missing license text. The upstream Chromium notice file is copied unchanged from the matching Electron installation at packaging time.
