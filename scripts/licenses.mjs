@@ -9,10 +9,11 @@ const json = (path) => JSON.parse(readFileSync(path, 'utf8'));
 export function thirdPartyNotices(root = projectRoot) {
   const lock = json(join(root, 'package-lock.json'));
   const entries = Object.entries(lock.packages).filter(([path, metadata]) => path && !metadata.dev);
-  // Electron is a build dependency in npm, but its runtime ships in the app.
+  // Electron ships in the app; Vite/esbuild can emit helper code into bundles.
+  // All three are npm development dependencies despite contributing runtime code.
   const electronPath = 'node_modules/electron';
-  if (!entries.some(([path]) => path === electronPath))
-    entries.push([electronPath, lock.packages[electronPath]]);
+  for (const path of [electronPath, 'node_modules/vite', 'node_modules/esbuild'])
+    if (!entries.some(([entry]) => entry === path)) entries.push([path, lock.packages[path]]);
   const packages = entries.map(([path, pinned]) => {
     if (!pinned) throw new Error(`Missing lockfile entry for ${path}. Run npm ci.`);
     const directory = join(root, path);
@@ -44,14 +45,17 @@ export function thirdPartyNotices(root = projectRoot) {
     (pkg) =>
       `## ${pkg.name} ${pkg.version}\n\nLicense: ${pkg.license}\n\n` +
       pkg.files
-        .map((file) => `### ${file.name}\n\n\`\`\`text\n${file.text.trimEnd()}\n\`\`\`\n`)
+        .map(
+          (file) =>
+            `### ${file.name}\n\n\`\`\`text\n${file.text.replace(/[\t ]+$/gm, '').trimEnd()}\n\`\`\`\n`,
+        )
         .join('\n'),
   );
   return [
     '# Third-party notices',
     '',
     'Generated with `npm run licenses` from the installed versions pinned in `package-lock.json`.',
-    'These notices cover Monitor’s production dependency graph and the Electron runtime. Build-only tools are not redistributed in the app.',
+    'These notices cover Monitor’s production dependency graph, the Electron runtime, and Vite/esbuild helper code emitted into the bundles. The build tools themselves are not redistributed in the app.',
     '',
     'The packaged app also includes Electron’s complete upstream `LICENSES.chromium.html` unchanged, covering Chromium and its bundled third-party components. Find it beside these notices in `Monitor.app/Contents/Resources/licenses/`.',
     '',

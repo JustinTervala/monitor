@@ -19,6 +19,8 @@ function fixture(t) {
     ['node_modules/runtime/node_modules/transitive', 'transitive', false],
     ['node_modules/build-tool', 'build-tool', true],
     ['node_modules/electron', 'electron', true],
+    ['node_modules/vite', 'vite', true],
+    ['node_modules/esbuild', 'esbuild', true],
   ]) {
     lock.packages[path] = { version: '1.0.0', dev };
     write(`${path}/package.json`, JSON.stringify({ name, version: '1.0.0', license: 'MIT' }));
@@ -37,12 +39,14 @@ function fixture(t) {
   return { root, write };
 }
 
-test('notices cover transitive runtime packages and Electron, preserving upstream attribution', (t) => {
+test('notices cover transitive packages, Electron and build helpers, preserving attribution', (t) => {
   const { root, write } = fixture(t);
   const notices = thirdPartyNotices(root);
   assert.match(notices, /## runtime 1\.0\.0/);
   assert.match(notices, /## transitive 1\.0\.0/);
   assert.match(notices, /## electron 1\.0\.0/);
+  assert.match(notices, /## vite 1\.0\.0/);
+  assert.match(notices, /## esbuild 1\.0\.0/);
   assert.match(notices, /Additional attribution must survive\./);
   assert.doesNotMatch(notices, /build-tool/);
   write('THIRD_PARTY_NOTICES.md', notices);
