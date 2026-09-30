@@ -35,6 +35,11 @@ try {
     electronVersion: JSON.parse(readFileSync('node_modules/electron/package.json', 'utf8')).version,
     appBundleId: 'local.monitor.desktop',
     appCategoryType: 'public.app-category.productivity',
+    // Required for macOS to ask before Monitor drives iTerm2 (Show/Resume in iTerm).
+    extendInfo: {
+      NSAppleEventsUsageDescription:
+        'Monitor switches to, or opens, the iTerm2 tab for a Claude session when you ask it to.',
+    },
     asar: true,
     overwrite: true,
     prune: false,

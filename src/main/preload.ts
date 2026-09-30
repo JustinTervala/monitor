@@ -6,6 +6,8 @@ const bridge: MonitorBridge = {
   command: (command) => ipcRenderer.invoke('monitor:command', command),
   openSession: (id) => ipcRenderer.invoke('monitor:open-session', id),
   copyResumeCommand: (id) => ipcRenderer.invoke('monitor:copy-resume', id),
+  showInTerminal: (id) => ipcRenderer.invoke('monitor:show-terminal', id),
+  resumeInTerminal: (id) => ipcRenderer.invoke('monitor:resume-terminal', id),
   refresh: () => ipcRenderer.invoke('monitor:refresh'),
   onSnapshot: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, snapshot: Snapshot) => callback(snapshot);

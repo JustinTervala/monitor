@@ -21,6 +21,8 @@ export interface Session {
   openable?: boolean;
   /** Claude Code session id for `claude --resume`; never a command string. */
   resumeId?: string | null;
+  /** Live Claude CLI process in a terminal, for Show in iTerm. */
+  terminalPid?: number | null;
 }
 
 export interface TaskGroup {
@@ -72,6 +74,10 @@ export interface MonitorBridge {
   openSession(sessionId: string): Promise<void>;
   /** Copies the validated resume command to the clipboard and returns it. */
   copyResumeCommand(sessionId: string): Promise<string>;
+  /** Brings the iTerm2 tab running this session to the front. */
+  showInTerminal(sessionId: string): Promise<void>;
+  /** Opens a new iTerm2 tab running the session's resume command. */
+  resumeInTerminal(sessionId: string): Promise<void>;
   refresh(): Promise<void>;
   onSnapshot(listener: (snapshot: Snapshot) => void): () => void;
 }

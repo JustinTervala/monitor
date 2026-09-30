@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import { MonitorStore } from './store';
 import { MonitorService } from './service';
 import { commandSchema } from './commands';
+import { resumeInITerm, showInITerm } from './iterm';
 import { CodexProvider } from '../providers/codex';
 import { ClaudeProvider } from '../providers/claude';
 
@@ -127,14 +128,19 @@ if (gotLock)
           if (!Notification.isSupported()) return;
           const notification = new Notification({ title: event.title, body: event.body });
           notifications.add(notification);
-          notification.on('click', () =>
-            // Terminal sessions have no app page; show Monitor, which offers the resume command.
-            service?.canOpen(event.sessionId)
-              ? void openSession(event.sessionId).catch((error) =>
-                  dialog.showErrorBox('Could not open session', String(error)),
-                )
-              : void showWindow(),
-          );
+          notification.on('click', () => {
+            const pid = service?.terminalPid(event.sessionId);
+            // Terminal sessions have no app page: jump to the live iTerm2 tab, or show
+            // Monitor, which offers Resume in iTerm once the process has exited.
+            const target = service?.canOpen(event.sessionId)
+              ? openSession(event.sessionId)
+              : pid
+                ? showInITerm(pid)
+                : showWindow();
+            void target.catch((error) =>
+              dialog.showErrorBox('Could not open session', String(error)),
+            );
+          });
           notification.on('close', () => notifications.delete(notification));
           notification.on('failed', () => notifications.delete(notification));
           notification.show();
@@ -160,6 +166,23 @@ if (gotLock)
         const command = service!.resumeCommand(id);
         clipboard.writeText(command);
         return command;
+      });
+      const sessionId = (id: unknown) => {
+        if (typeof id !== 'string' || id.length > 256) throw new Error('Invalid session id.');
+        return id;
+      };
+      ipcMain.handle('monitor:show-terminal', async (event, id) => {
+        validateSender(event);
+        const pid = service!.terminalPid(sessionId(id));
+        if (!pid) throw new Error('This session is not running in a terminal.');
+        await showInITerm(pid);
+      });
+      ipcMain.handle('monitor:resume-terminal', async (event, id) => {
+        validateSender(event);
+        // Only terminal sessions: resuming a desktop session could run it twice.
+        if (service!.canOpen(sessionId(id)))
+          throw new Error('Open this session in Claude desktop instead.');
+        await resumeInITerm(service!.resumeCommand(id));
       });
       ipcMain.handle('monitor:refresh', async (event) => {
         validateSender(event);

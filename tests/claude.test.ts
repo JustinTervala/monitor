@@ -347,6 +347,7 @@ test('terminal sessions: running, result, exit and resume command', async (t) =>
   assert.equal(s.status, 'running');
   assert.equal(s.evidence, 'live', 'terminal sessions are observed without the desktop');
   assert.equal(s.openable, false);
+  assert.equal(s.terminalPid, 20);
   assert.equal(s.title, 'Refactor parser');
   assert.equal(health.at(-1)!.state, 'degraded');
   assert.throws(() => provider.sessionUrl(id), /resume command/);
@@ -436,6 +437,7 @@ test('a desktop session resumed in a terminal stays one task and shows running',
     sessions.map((s) => [s.externalId, s.status]),
     [[A, 'running']],
   );
+  assert.equal(sessions[0].terminalPid, 21, 'Show in iTerm reaches the resumed process');
 });
 
 test('the plugin hook script writes only whitelisted fields the provider can read', (t) => {

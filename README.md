@@ -39,7 +39,7 @@ claude plugin marketplace add /path/to/this/repo
 claude plugin install monitor-hooks@monitor
 ```
 
-It records session ids, timings and directories only, never prompts or responses. Terminal tasks offer **Copy resume command** (`cd … && claude --resume <id>`) instead of an Open button.
+It records session ids, timings and directories only, never prompts or responses. Terminal tasks offer **Show in iTerm** (jumps to the tab running the session) or, after it exits, **Resume in iTerm** (new tab running `claude --resume`). **Copy resume command** works for any Claude task. The first use asks macOS for permission to control iTerm2.
 
 ## Use
 

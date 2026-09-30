@@ -136,6 +136,9 @@ export class MonitorService extends EventEmitter {
   canOpen(id: string): boolean {
     return this.state.sessions[id]?.openable !== false;
   }
+  terminalPid(id: string): number | null {
+    return this.state.sessions[id]?.terminalPid ?? null;
+  }
   resumeCommand(id: string): string {
     const session = this.state.sessions[id];
     const command = session && resumeCommand(session);

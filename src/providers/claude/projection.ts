@@ -19,6 +19,8 @@ export function sessionFromRecord(
     archived: record.archived,
     openable: true,
     resumeId: record.cliSessionId,
+    // Set when the desktop session was resumed with `claude --resume` in a terminal.
+    terminalPid: live && 'sessionId' in live ? live.pid : null,
   };
   if (!desktopRunning)
     return {
@@ -94,6 +96,7 @@ export function sessionFromTerminal(
     archived: false,
     openable: false,
     resumeId: sessionId,
+    terminalPid: live?.pid ?? null,
   };
   const evidence: Session['evidence'] = live ? 'live' : 'history';
   const observed = (

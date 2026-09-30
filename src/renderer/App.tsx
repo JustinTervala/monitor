@@ -88,14 +88,29 @@ export function App() {
       return false;
     }
   }
-  async function open(session: Session) {
+  async function attempt(run: () => Promise<unknown>) {
     try {
-      await window.monitor.openSession(session.id);
+      await run();
       setError('');
     } catch (e) {
-      setError(String(e));
+      // Show the main process's own message, not Electron's IPC wrapper.
+      setError(String(e).replace(/^Error: Error invoking remote method '[^']+': (Error: )?/, ''));
     }
   }
+  /** The session's primary destination: its app page, its live iTerm2 tab, or a resumed one. */
+  function primary(session: Session): { label: string; run: () => Promise<void> } | null {
+    if (session.openable !== false)
+      return {
+        label: `Open in ${session.provider === 'codex' ? 'Codex' : 'Claude'}`,
+        run: () => window.monitor.openSession(session.id),
+      };
+    if (session.terminalPid)
+      return { label: 'Show in iTerm', run: () => window.monitor.showInTerminal(session.id) };
+    if (resumeCommand(session))
+      return { label: 'Resume in iTerm', run: () => window.monitor.resumeInTerminal(session.id) };
+    return null;
+  }
+  const go = (session: Session) => attempt(async () => primary(session)?.run());
   async function copyResume(session: Session) {
     try {
       await window.monitor.copyResumeCommand(session.id);
@@ -522,22 +537,28 @@ export function App() {
                   {statusLabel[session.status]}
                   <span className="provider-name">{session.provider}</span>
                 </div>
-                {session.openable === false ? (
-                  <span className="session-link">{session.title}</span>
-                ) : (
-                  <button className="session-link" onClick={() => void open(session)}>
+                {primary(session) ? (
+                  <button className="session-link" onClick={() => void go(session)}>
                     {session.title}
                     <span aria-hidden>↗</span>
                   </button>
+                ) : (
+                  <span className="session-link">{session.title}</span>
                 )}
                 <p>{session.detail}</p>
                 <code title={session.directory || ''}>
                   {session.directory || 'Source directory unavailable'}
                 </code>
                 <div className="session-actions">
-                  {session.openable !== false && (
-                    <button onClick={() => void open(session)}>
-                      Open in {session.provider === 'codex' ? 'Codex' : 'Claude'} ↗
+                  {primary(session) && (
+                    <button onClick={() => void go(session)}>{primary(session)!.label} ↗</button>
+                  )}
+                  {session.openable !== false && session.terminalPid && (
+                    <button
+                      className="quiet"
+                      onClick={() => void attempt(() => window.monitor.showInTerminal(session.id))}
+                    >
+                      Show in iTerm
                     </button>
                   )}
                   {resumeCommand(session) && (

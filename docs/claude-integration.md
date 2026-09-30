@@ -103,14 +103,26 @@ A terminal has no read receipt or focus signal. A result stays in Needs review u
 
 The desktop registers the `claude:` scheme. Its handler accepts `claude://code/continue?session=<id>` where the id matches `^local_[A-Za-z0-9-]{1,64}$`, and navigates to that session's route. The adapter validates the same pattern. The main process additionally accepts only that exact URL shape for `claude:`. The handler is inert when a managed policy sets `disableDeepLinks` or the app is logged out.
 
-## Resuming in a terminal
+## iTerm2 and resuming
 
-Every Claude task with a known Claude Code session id offers **Copy resume command**: `cd '<session directory>' && claude --resume <session-id>`. That covers terminal sessions and desktop sessions, which record their `cliSessionId`.
+iTerm2 has no URL scheme for tabs or commands. Monitor drives it with iTerm2's AppleScript dictionary (`application id "com.googlecode.iterm2"`) via `/usr/bin/osascript`. Every value reaches the script through `argv`; nothing is interpolated into script source.
 
-- **Construction:** the main process builds the command from observed state, never from renderer-supplied text. The directory is single-quoted for POSIX shells, and the id must be a UUID.
-- **Terminal sessions:** these have no desktop page, so there is no Open button. Clicking a notification for one shows Monitor instead.
-- **Same machine only:** transcripts live in the local `~/.claude/projects`, so the command only resumes on the Mac that ran the session.
-- **Desktop sessions:** resuming one while Claude desktop is running it can conflict; the button's tooltip warns about this. A resumed desktop session stays a single Monitor task, and shows running from the terminal process.
+| Task                             | Primary action      | How                                                                                                                                  |
+| -------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Terminal session, process alive  | **Show in iTerm**   | Registry pid → `ps -o tty=,comm=` (must still be a `claude` process) → select the iTerm2 session whose `tty` matches, bring it front |
+| Terminal session, process exited | **Resume in iTerm** | New tab in the current window (or a new window) → `write text` the resume command                                                    |
+| Desktop session                  | Open in Claude      | Deep link; **Show in iTerm** is also offered while it's resumed in a terminal                                                        |
+
+**Copy resume command** is on every Claude task with a Claude Code session id: `cd '<session directory>' && claude --resume <session-id>`. The main process builds it from observed state, never from renderer text. The directory is single-quoted for POSIX shells and the id must be a UUID.
+
+Notification clicks use the same primary action. A terminal session that has exited shows Monitor instead of resuming automatically.
+
+Caveats:
+
+- **Permission:** the first use asks for Automation permission ("Monitor wants to control iTerm2"). The packaged app declares `NSAppleEventsUsageDescription` for this; stock Electron in `npm run dev` does not, so macOS may refuse there. If it's denied, Monitor explains how to allow it in System Settings → Privacy & Security → Automation.
+- **tmux:** a session inside tmux has tmux's tty, not an iTerm tab's, so Show reports that no tab owns it. Use Copy resume command.
+- **Desktop sessions:** Resume in iTerm is deliberately not offered, so a desktop session is never run twice.
+- **Same machine only:** transcripts live in this Mac's `~/.claude/projects`.
 
 ## Verification
 
@@ -124,6 +136,7 @@ Fixture-tested (`tests/claude.test.ts`, `tests/service.test.ts`):
 - Archived tasks followed only when already admitted.
 - URL validation.
 - Snoozed and archived mixed-provider groups staying quiet.
+- iTerm2: tty lookup, pid-reuse guard, argv-only AppleScript, missing tab and denied permission (`tests/iterm.test.ts`, fake process runner). Both scripts compile against the installed iTerm2 3.4.4 dictionary (`osacompile`). The Electron UI shows Show/Resume/Copy for live and exited terminal sessions.
 
 Observed live on the development Mac (`npm run probe:claude`):
 
