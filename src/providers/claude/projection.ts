@@ -51,8 +51,10 @@ export function sessionFromRecord(
     return focused >= record.errorAt
       ? observed('read', 'Error seen in Claude', `error:${record.errorAt}`)
       : observed('review', 'Claude reported an error', `error:${record.errorAt}`);
-  if (record.lastAssistantUuid) {
-    const key = `result:${record.lastAssistantUuid}`;
+  if (record.lastAssistantUuid || record.completedTurns) {
+    // lastAssistantUuid changes per message and can be saved mid-wrap-up, so it
+    // would identify one turn twice. The completed-turn count changes once.
+    const key = `result:${record.completedTurns}`;
     return record.lastActivityAt && focused >= record.lastActivityAt
       ? observed('read', 'Opened in Claude since the last response', key)
       : observed('review', 'New response · not opened in Claude since', key);

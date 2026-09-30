@@ -25,9 +25,10 @@ If hook-based observation is wanted later, it should be an opt-in the user confi
 
 ## Sources
 
-**Desktop session record** (read-only JSON, polled every 3 s plus `fs.watch`). The adapter keeps only these fields: `sessionId`, `title`, `cwd`, `isArchived`, `createdAt`, `lastActivityAt`, `lastFocusedAt`, `lastAssistantUuid`, and `errorAt`. It uses `errorAt` only when `error` is present, and never reads the error text. Records also carry prompt snapshots, summaries, and error messages. Those are parsed in memory and discarded; none reach `Session`, Monitor's database, or the renderer. Records over 16 MiB and unparseable (mid-write) files are skipped until the next pass.
+**Desktop session record** (read-only JSON, polled every 3 s plus `fs.watch`). The adapter keeps only these fields: `sessionId`, `title`, `cwd`, `isArchived`, `createdAt`, `lastActivityAt`, `lastFocusedAt`, `lastAssistantUuid`, `completedTurns`, and `errorAt`. It uses `errorAt` only when `error` is present, and never reads the error text. Records also carry prompt snapshots, summaries, and error messages. Those are parsed in memory and discarded; none reach `Session`, Monitor's database, or the renderer. Records over 16 MiB and unparseable (mid-write) files are skipped until the next pass.
 
-- The desktop sets `lastAssistantUuid` on every top-level assistant message.
+- The desktop sets `lastAssistantUuid` on every top-level assistant message. It was observed live changing twice within 3 s of one turn ending (an intermediate save, then the final message), so it is not used as result identity.
+- `completedTurns` increments once per successful turn and is the result identity. A turn that ends in an error is identified by `errorAt` instead; a turn you interrupt produces no new result.
 - It sets `lastActivityAt` on every stream event, including turn completion.
 - It sets `lastFocusedAt` when the session becomes visible in the app, which includes navigation by deep link.
 
@@ -44,17 +45,17 @@ Only records whose pid is alive (`kill(pid, 0)`) count. Monitor never connects t
 
 ## State mapping
 
-| Evidence                                        | Monitor state | `attentionKey`               |
-| ----------------------------------------------- | ------------- | ---------------------------- |
-| Desktop not running                             | Unavailable   | none                         |
-| Live process `waiting` (permission prompt)      | Needs review  | `waiting:<statusUpdatedAt>`  |
-| Live process `waiting` (other input)            | Needs review  | `waiting:<statusUpdatedAt>`  |
-| Live process `busy` or `shell`                  | Running       | none                         |
-| Recorded error, not focused since `errorAt`     | Needs review  | `error:<errorAt>`            |
-| Recorded error, focused since                   | Read          | `error:<errorAt>`            |
-| Last result, not focused since `lastActivityAt` | Needs review  | `result:<lastAssistantUuid>` |
-| Last result, focused since                      | Read          | `result:<lastAssistantUuid>` |
-| No result recorded yet                          | Unavailable   | none                         |
+| Evidence                                        | Monitor state | `attentionKey`              |
+| ----------------------------------------------- | ------------- | --------------------------- |
+| Desktop not running                             | Unavailable   | none                        |
+| Live process `waiting` (permission prompt)      | Needs review  | `waiting:<statusUpdatedAt>` |
+| Live process `waiting` (other input)            | Needs review  | `waiting:<statusUpdatedAt>` |
+| Live process `busy` or `shell`                  | Running       | none                        |
+| Recorded error, not focused since `errorAt`     | Needs review  | `error:<errorAt>`           |
+| Recorded error, focused since                   | Read          | `error:<errorAt>`           |
+| Last result, not focused since `lastActivityAt` | Needs review  | `result:<completedTurns>`   |
+| Last result, focused since                      | Read          | `result:<completedTurns>`   |
+| No result recorded yet                          | Unavailable   | none                        |
 
 Result identity is present even when the result is read, so a turn that finishes in the foreground still notifies once. Identity comes from the same file read as the state, so the adapter never emits a live idle state before identity is known.
 
@@ -68,7 +69,7 @@ Disconnect and reconnect:
 
 - **No authoritative read receipt.** The Code-tab sidebar's blue dot is renderer-only state and is not persisted anywhere Monitor can read safely. `lastFocusedAt` is used as acknowledgment evidence instead:
   - Opening a session after its result marks it read.
-  - Watching a session finish while it is already visible does **not**. It stays in Needs review until you switch away and back, or open it from Monitor.
+  - Watching a session finish while it is already visible does **not**. It stays in Needs review until you switch to another session and back. Opening it from Monitor while it is already on screen does not count either; this was observed live.
   - Marking a session read or unread in the Claude sidebar is not reflected.
   - Metadata-only activity after focus, such as system notifications injected into the session, can move a read session back to review without a new notification.
 - **Running evidence depends on the CLI registry.** A turn whose CLI process crashed shows the last recorded result, not a failure. `interruptedByQuitAt` is not interpreted.
@@ -96,7 +97,7 @@ Fixture-tested (`tests/claude.test.ts`, `tests/service.test.ts`):
 Observed live on the development Mac (`npm run probe:claude`):
 
 - Discovery and health `live`.
-- This Code session reported `running` from its `busy` registry entry.
+- This Code session reported `running` from its `busy` registry entry, then `review` with a result identity within a second of its turn ending (desktop log: query completed 06:28:30).
 - Opening `claude://code/continue?session=local_…` focused the exact session in the desktop app. `lastFocusedAt` moved to the moment of the call, and the desktop log recorded warming that session.
 
 `npm run probe:claude -- 300` logs each state transition for five minutes, for manual end-to-end checks.

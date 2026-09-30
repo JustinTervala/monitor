@@ -48,7 +48,12 @@ function fixture() {
 test('catalog reads whitelisted desktop metadata only and never writes the source', (t) => {
   const f = fixture();
   t.after(() => rmSync(f.root, { recursive: true }));
-  f.record(A, { lastAssistantUuid: uuid(1), error: 'SECRET ERROR', errorAt: 1500 });
+  f.record(A, {
+    lastAssistantUuid: uuid(1),
+    completedTurns: 1,
+    error: 'SECRET ERROR',
+    errorAt: 1500,
+  });
   f.record(B, { isArchived: true });
   writeFileSync(join(f.org, 'scheduled-tasks.json'), '{}');
   writeFileSync(join(f.org, 'local_broken.json'), '{not json');
@@ -103,11 +108,16 @@ test('a task moves through running, review, acknowledgment, disconnect and recon
     return service.snapshot().state.sessions[`claude:${A}`];
   };
   // Historical result on startup: baseline only, no notification.
-  f.record(A, { lastAssistantUuid: uuid(1), lastActivityAt: 2000, lastFocusedAt: 1500 });
+  f.record(A, {
+    lastAssistantUuid: uuid(1),
+    completedTurns: 1,
+    lastActivityAt: 2000,
+    lastFocusedAt: 1500,
+  });
   await service.start();
   let s = await current();
   assert.equal(s.status, 'review');
-  assert.equal(s.attentionKey, `result:${uuid(1)}`);
+  assert.equal(s.attentionKey, `result:1`);
   assert.equal(s.evidence, 'live');
   assert.equal(notices.length, 0);
 
@@ -132,18 +142,38 @@ test('a task moves through running, review, acknowledgment, disconnect and recon
   f.proc(42, { hostSessionId: A, status: 'busy', statusUpdatedAt: 3200 });
   assert.equal((await current()).status, 'running');
   f.proc(42, { hostSessionId: A, status: 'idle', statusUpdatedAt: 4000 });
-  f.record(A, { lastAssistantUuid: uuid(2), lastActivityAt: 4000, lastFocusedAt: 1500 });
+  f.record(A, {
+    lastAssistantUuid: uuid(2),
+    completedTurns: 2,
+    lastActivityAt: 4000,
+    lastFocusedAt: 1500,
+  });
   s = await current();
   assert.equal(s.status, 'review');
-  assert.equal(s.attentionKey, `result:${uuid(2)}`);
+  assert.equal(s.attentionKey, `result:2`);
   assert.equal(notices.length, 2);
   assert.equal(notices[1].body, 'Claude · New response · not opened in Claude since');
+  // Observed live: the desktop saves the record again with the final message's
+  // uuid moments after the turn ends. That is the same result, not a new one.
+  f.record(A, {
+    lastAssistantUuid: uuid(9),
+    completedTurns: 2,
+    lastActivityAt: 4050,
+    lastFocusedAt: 1500,
+  });
+  assert.equal((await current()).attentionKey, 'result:2');
+  assert.equal(notices.length, 2);
 
   // Focusing the session in Claude acknowledges it; the result identity is unchanged.
-  f.record(A, { lastAssistantUuid: uuid(2), lastActivityAt: 4000, lastFocusedAt: 4100 });
+  f.record(A, {
+    lastAssistantUuid: uuid(2),
+    completedTurns: 2,
+    lastActivityAt: 4050,
+    lastFocusedAt: 4100,
+  });
   s = await current();
   assert.equal(s.status, 'read');
-  assert.equal(s.attentionKey, `result:${uuid(2)}`);
+  assert.equal(s.attentionKey, `result:2`);
   assert.equal(notices.length, 2);
 
   // Desktop quits: unavailable, never "finished".
@@ -153,11 +183,16 @@ test('a task moves through running, review, acknowledgment, disconnect and recon
   assert.equal(s.evidence, 'unavailable');
   assert.equal(s.attentionKey, null);
   // Result that landed while offline is a new baseline on reconnect, not a notification.
-  f.record(A, { lastAssistantUuid: uuid(3), lastActivityAt: 5000, lastFocusedAt: 4100 });
+  f.record(A, {
+    lastAssistantUuid: uuid(3),
+    completedTurns: 3,
+    lastActivityAt: 5000,
+    lastFocusedAt: 4100,
+  });
   running = true;
   s = await current();
   assert.equal(s.status, 'review');
-  assert.equal(s.attentionKey, `result:${uuid(3)}`);
+  assert.equal(s.attentionKey, `result:3`);
   assert.equal(notices.length, 2);
   await new Promise((r) => setTimeout(r, 150));
   assert.ok(health.some((h) => h.provider === 'claude' && h.state === 'live'));
@@ -174,11 +209,23 @@ test('an error is actionable until the session is focused afterwards', async (t)
     pollMs: 60_000,
   });
   t.after(() => provider.stop());
-  f.record(A, { lastAssistantUuid: uuid(1), error: 'x', errorAt: 3000, lastFocusedAt: 2500 });
+  f.record(A, {
+    lastAssistantUuid: uuid(1),
+    completedTurns: 1,
+    error: 'x',
+    errorAt: 3000,
+    lastFocusedAt: 2500,
+  });
   await provider.start({ sessions: (v) => (sessions = v), health: () => {} });
   assert.equal(sessions[0].status, 'review');
   assert.equal(sessions[0].attentionKey, 'error:3000');
-  f.record(A, { lastAssistantUuid: uuid(1), error: 'x', errorAt: 3000, lastFocusedAt: 3500 });
+  f.record(A, {
+    lastAssistantUuid: uuid(1),
+    completedTurns: 1,
+    error: 'x',
+    errorAt: 3000,
+    lastFocusedAt: 3500,
+  });
   await provider.refresh();
   assert.equal(sessions[0].status, 'read');
 });

@@ -16,6 +16,8 @@ export interface DesktopRecord {
   lastActivityAt: number | null;
   lastFocusedAt: number | null;
   lastAssistantUuid: string | null;
+  /** Successful turns; incremented once per turn, unlike the per-message uuid. */
+  completedTurns: number;
   errorAt: number | null;
 }
 
@@ -74,6 +76,10 @@ export function readDesktopRecords(root: string): DesktopRecord[] {
       lastActivityAt: time(raw.lastActivityAt),
       lastFocusedAt: time(raw.lastFocusedAt),
       lastAssistantUuid: typeof assistant === 'string' && uuid.test(assistant) ? assistant : null,
+      completedTurns:
+        Number.isSafeInteger(raw.completedTurns) && (raw.completedTurns as number) > 0
+          ? (raw.completedTurns as number)
+          : 0,
       errorAt: raw.error !== undefined && raw.error !== null ? time(raw.errorAt) : null,
     };
     const old = byId.get(sessionId);
