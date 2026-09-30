@@ -9,6 +9,5 @@ Monitor is a personal app for one person, Justin. There are no other users to su
 - Work directly on `main` and push completed changes. Do not create pull requests or a review workflow for this project.
 - Keep the existing Codex and Claude harnesses. Session status belongs to the source app; grouping, ordering, snoozing, and local archiving belong to Monitor.
 - Keep integrations local. Never persist prompts, responses, tool arguments, credentials, or raw hook payloads. Use synthetic fixtures in tests.
-- Prefix shell commands with `rtk` (use `rtk proxy` when needed).
 
 Run `npm run check` for implementation changes and `npm run smoke` when desktop integration or UI behavior changes. Use Node 24 or newer. Keep validation claims specific about fixture tests versus live source-app observations.
