@@ -90,6 +90,7 @@ const env = {
   // Isolate from the real Claude desktop store; Claude is covered by its adapter tests.
   MONITOR_CLAUDE_DESKTOP_DIR: join(root, 'claude-desktop'),
   CLAUDE_CONFIG_DIR: join(root, 'claude-config'),
+  MONITOR_CLAUDE_HOOKS_DIR: join(root, 'claude-hooks'),
 };
 delete env.ELECTRON_RUN_AS_NODE;
 delete env.MONITOR_DEV_URL;

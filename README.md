@@ -2,7 +2,7 @@
 
 A local Mac control plane for ongoing AI work. Keep using Codex and Claude; Monitor watches your existing sessions, preserves workstream priority, and opens the originating task.
 
-It observes **Codex desktop** tasks and **Claude desktop Code-tab** sessions. Ordinary Claude chats are not represented.
+It observes **Codex desktop** tasks, **Claude desktop Code-tab** sessions and, with the optional hooks plugin, **terminal `claude` sessions**. Ordinary Claude chats are not represented.
 
 ## Run
 
@@ -29,6 +29,17 @@ npm start
 Create a local Mac application with `npm run package:mac`. It writes `out/Monitor-macos-arm64.zip` (or `x64` on an Intel Mac). Extract **Monitor.app** into `~/Applications` or `/Applications` and open it. The bundle is assembled outside synced folders and signed ad hoc for local use; notarized distribution is not configured.
 
 The renderer reloads during development. Restart `npm run dev` after changing main-process or provider code. Close the window to keep observing in the menu bar; **Quit Monitor** stops observation.
+
+### Terminal Claude sessions (optional)
+
+To get turn results from `claude` sessions in iTerm or another terminal, install the bundled hooks plugin once:
+
+```sh
+claude plugin marketplace add /path/to/this/repo
+claude plugin install monitor-hooks@monitor
+```
+
+It records session ids, timings and directories only, never prompts or responses. Terminal tasks offer **Copy resume command** (`cd … && claude --resume <id>`) instead of an Open button.
 
 ## Use
 

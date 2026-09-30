@@ -17,6 +17,10 @@ export interface Session {
   /** Stable result/request identity, not an observation timestamp. */
   attentionKey: string | null;
   archived: boolean;
+  /** false when the source app has no exact-session route (e.g. a terminal session). */
+  openable?: boolean;
+  /** Claude Code session id for `claude --resume`; never a command string. */
+  resumeId?: string | null;
 }
 
 export interface TaskGroup {
@@ -66,6 +70,8 @@ export interface MonitorBridge {
   snapshot(): Promise<Snapshot>;
   command(command: Command): Promise<Snapshot>;
   openSession(sessionId: string): Promise<void>;
+  /** Copies the validated resume command to the clipboard and returns it. */
+  copyResumeCommand(sessionId: string): Promise<string>;
   refresh(): Promise<void>;
   onSnapshot(listener: (snapshot: Snapshot) => void): () => void;
 }

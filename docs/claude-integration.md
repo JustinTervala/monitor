@@ -1,27 +1,36 @@
-# Claude desktop observer
+# Claude observer
 
 Compatibility was inspected on macOS with Claude desktop `2.16120.0` (bundle `com.anthropic.claudefordesktop`) and its bundled Claude Code CLI `2.1.284`. Like the Codex adapter, this is a read-only observer of **undocumented local stores**, not a supported public API.
 
 ## What is observable
 
-| Claude surface                | Local state                                                  | Represented                           |
-| ----------------------------- | ------------------------------------------------------------ | ------------------------------------- |
-| Desktop **Code** tab sessions | `claude-code-sessions/<account>/<org>/local_<id>.json`       | Yes                                   |
-| Ordinary Claude chats         | Server-side only; no local catalog                           | No, and never shown as a Code session |
-| Cowork / local agent mode     | `local-agent-mode-sessions/` (separate store and routes)     | No                                    |
-| Terminal `claude` sessions    | `~/.claude/projects/*.jsonl`, no desktop record or deep link | No                                    |
+| Claude surface                          | Local state                                                              | Represented                           |
+| --------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------- |
+| Desktop **Code** tab sessions           | `claude-code-sessions/<account>/<org>/local_<id>.json`                   | Yes; opens in Claude                  |
+| Terminal `claude` sessions (e.g. iTerm) | Process registry while running; `monitor-hooks` plugin files for results | Yes; copy a resume command            |
+| Ordinary Claude chats                   | Server-side only; no local catalog                                       | No, and never shown as a Code session |
+| Cowork / local agent mode               | `local-agent-mode-sessions/` (separate store and routes)                 | No                                    |
+| Headless `claude -p` runs               | Registry entry with a non-`cli` entrypoint                               | No                                    |
+| Sessions on other machines              | That machine's `~/.claude`                                               | No                                    |
 
 The desktop store lives in `~/Library/Application Support/Claude/`. The adapter enumerates every record in it without a count limit. The store is a directory, so there is no pagination.
 
-## Why not hooks
+## Hooks plugin (terminal sessions)
 
-Claude Code [hooks](https://code.claude.com/docs/en/hooks) (`Stop`, `Notification`, `UserPromptSubmit`, …) are the documented integration. They were not used, for three reasons:
+Terminal sessions have no persisted state that Monitor can read, apart from the live process registry. The optional **`monitor-hooks`** plugin (`plugins/monitor-hooks/`) fills that gap with documented Claude Code [hooks](https://code.claude.com/docs/en/hooks). Installing it is the user's choice; Monitor never edits Claude settings itself.
 
-1. Hooks require editing the user's Claude settings. The handoff does not authorize that change, and Monitor must not change source-app configuration.
-2. Hooks report execution, but they do not expose desktop read/acknowledgment state or exact-session navigation. Monitor would still need the desktop records.
-3. A hook runs only for turns started after it is installed. It cannot baseline existing tasks.
+```sh
+claude plugin marketplace add /path/to/monitor
+claude plugin install monitor-hooks@monitor
+```
 
-If hook-based observation is wanted later, it should be an opt-in the user configures. It could replace the process registry below for running/waiting evidence.
+- **Events:** `SessionStart`, `Stop`, `StopFailure` and `SessionEnd`. All are exec-form (`/bin/sh` plus the script path) and `async`, so they never delay Claude. Subagent events are ignored.
+- **Parsing:** the script parses the hook JSON with the macOS built-in `/usr/bin/plutil`, so there are no dependencies. Where `plutil` is missing (e.g. Linux), it exits silently.
+- **What it writes:** one small `key=value` file per event kind, `<session>.{start,result,end}`, in `~/Library/Application Support/Monitor/claude-hooks/` (`MONITOR_CLAUDE_HOOKS_DIR` overrides it). The fields are session id, time, `CLAUDE_CODE_ENTRYPOINT`, cwd, session title, `prompt_id`, error type and end reason. Each file is written atomically, mode `0600`.
+- **What it never writes:** hook input includes `prompt_text` or `last_assistant_message`. That text stays in the hook's memory and is never written; a test asserts this.
+- **Entrypoint filter:** hooks also fire in desktop sessions. Monitor only admits hook sessions whose entrypoint is `cli`, and never lists a desktop session twice.
+
+Without the plugin, terminal sessions still appear while their process runs, as running, waiting or "install monitor-hooks to see results". They just can't produce result notifications.
 
 ## Sources
 
@@ -65,6 +74,19 @@ Disconnect and reconnect:
 - On relaunch, the next observation is a fresh baseline. Results that landed while offline do not notify.
 - A missing CLI process is never treated as success. The key names the specific recorded assistant message, not "the latest turn succeeded".
 
+### Terminal sessions
+
+| Evidence                                              | Monitor state | `attentionKey`              |
+| ----------------------------------------------------- | ------------- | --------------------------- |
+| Live CLI process `waiting`                            | Needs review  | `waiting:<statusUpdatedAt>` |
+| Live CLI process `busy` or `shell`                    | Running       | none                        |
+| `Stop` hook result, process idle or exited            | Needs review  | `result:<prompt_id>`        |
+| `StopFailure` hook result                             | Needs review  | `error:<prompt_id>`         |
+| `SessionEnd` recorded after the result (e.g. `/exit`) | Read          | unchanged                   |
+| No live process and no recorded result                | Unavailable   | none                        |
+
+A terminal has no read receipt or focus signal. A result stays in Needs review until the session ends, or until the next prompt makes it run again. Once the process has exited, the evidence is `history`, so a result first seen after exit does not notify.
+
 ## Limitations
 
 - **No authoritative read receipt.** The Code-tab sidebar's blue dot is renderer-only state and is not persisted anywhere Monitor can read safely. `lastFocusedAt` is used as acknowledgment evidence instead:
@@ -80,6 +102,15 @@ Disconnect and reconnect:
 ## Navigation
 
 The desktop registers the `claude:` scheme. Its handler accepts `claude://code/continue?session=<id>` where the id matches `^local_[A-Za-z0-9-]{1,64}$`, and navigates to that session's route. The adapter validates the same pattern. The main process additionally accepts only that exact URL shape for `claude:`. The handler is inert when a managed policy sets `disableDeepLinks` or the app is logged out.
+
+## Resuming in a terminal
+
+Every Claude task with a known Claude Code session id offers **Copy resume command**: `cd '<session directory>' && claude --resume <session-id>`. That covers terminal sessions and desktop sessions, which record their `cliSessionId`.
+
+- **Construction:** the main process builds the command from observed state, never from renderer-supplied text. The directory is single-quoted for POSIX shells, and the id must be a UUID.
+- **Terminal sessions:** these have no desktop page, so there is no Open button. Clicking a notification for one shows Monitor instead.
+- **Same machine only:** transcripts live in the local `~/.claude/projects`, so the command only resumes on the Mac that ran the session.
+- **Desktop sessions:** resuming one while Claude desktop is running it can conflict; the button's tooltip warns about this. A resumed desktop session stays a single Monitor task, and shows running from the terminal process.
 
 ## Verification
 

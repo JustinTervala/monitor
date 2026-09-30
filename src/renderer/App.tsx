@@ -10,6 +10,7 @@ import {
 } from '../shared/queue';
 import type { Command, Session, Snapshot, TaskGroup } from '../shared/types';
 import { ArchiveIcon, ArchivePage } from './ArchivePage';
+import { resumeCommand } from '../shared/resume';
 
 type Editor =
   { kind: 'rename'; group: TaskGroup } | { kind: 'merge'; source: TaskGroup; target: TaskGroup };
@@ -53,6 +54,7 @@ export function App() {
   const [drop, setDrop] = useState<{ id: string; placement: 'before' | 'after' } | null>(null);
   const [priorityView, setPriorityView] = useState(false);
   const [page, setPage] = useState<'queue' | 'archive'>('queue');
+  const [copied, setCopied] = useState<string | null>(null);
   const revision = useRef(0);
   useEffect(() => {
     let mounted = true;
@@ -89,6 +91,16 @@ export function App() {
   async function open(session: Session) {
     try {
       await window.monitor.openSession(session.id);
+      setError('');
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+  async function copyResume(session: Session) {
+    try {
+      await window.monitor.copyResumeCommand(session.id);
+      setCopied(session.id);
+      setTimeout(() => setCopied((id) => (id === session.id ? null : id)), 2000);
       setError('');
     } catch (e) {
       setError(String(e));
@@ -510,18 +522,33 @@ export function App() {
                   {statusLabel[session.status]}
                   <span className="provider-name">{session.provider}</span>
                 </div>
-                <button className="session-link" onClick={() => void open(session)}>
-                  {session.title}
-                  <span aria-hidden>↗</span>
-                </button>
+                {session.openable === false ? (
+                  <span className="session-link">{session.title}</span>
+                ) : (
+                  <button className="session-link" onClick={() => void open(session)}>
+                    {session.title}
+                    <span aria-hidden>↗</span>
+                  </button>
+                )}
                 <p>{session.detail}</p>
                 <code title={session.directory || ''}>
                   {session.directory || 'Source directory unavailable'}
                 </code>
                 <div className="session-actions">
-                  <button onClick={() => void open(session)}>
-                    Open in {session.provider === 'codex' ? 'Codex' : 'Claude'} ↗
-                  </button>
+                  {session.openable !== false && (
+                    <button onClick={() => void open(session)}>
+                      Open in {session.provider === 'codex' ? 'Codex' : 'Claude'} ↗
+                    </button>
+                  )}
+                  {resumeCommand(session) && (
+                    <button
+                      className="quiet"
+                      title={`${resumeCommand(session)}${session.openable === false ? '' : '\nAvoid resuming while Claude desktop has this session running.'}`}
+                      onClick={() => void copyResume(session)}
+                    >
+                      {copied === session.id ? 'Copied ✓' : 'Copy resume command'}
+                    </button>
+                  )}
                   {selectedGroup.sessionIds.length > 1 && (
                     <button
                       className="quiet"

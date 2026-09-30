@@ -3,6 +3,7 @@ import { applyCommand, groupName, isSnoozed, newGroup } from '../shared/queue';
 import type { Command, MonitorState, ProviderHealth, Session, Snapshot } from '../shared/types';
 import type { SessionProvider } from '../providers/provider';
 import { MonitorStore } from './store';
+import { resumeCommand } from '../shared/resume';
 
 export interface NotificationEvent {
   title: string;
@@ -131,6 +132,15 @@ export class MonitorService extends EventEmitter {
     const provider = this.providers.find((p) => p.id === session?.provider);
     if (!session || !provider) throw new Error('This session provider is not available.');
     return provider.sessionUrl(session.externalId);
+  }
+  canOpen(id: string): boolean {
+    return this.state.sessions[id]?.openable !== false;
+  }
+  resumeCommand(id: string): string {
+    const session = this.state.sessions[id];
+    const command = session && resumeCommand(session);
+    if (!command) throw new Error('This session cannot be resumed from a terminal.');
+    return command;
   }
   async refresh() {
     await Promise.all(this.providers.map((provider) => provider.refresh()));

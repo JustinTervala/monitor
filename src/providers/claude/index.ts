@@ -7,17 +7,21 @@ import type { Session } from '../../shared/types';
 import {
   processAlive,
   readDesktopRecords,
+  readHookSessions,
   readLiveProcesses,
+  validCliSessionId,
   validSessionId,
   type DesktopRecord,
 } from './catalog';
-import { sessionFromRecord } from './projection';
+import { sessionFromRecord, sessionFromTerminal } from './projection';
 
 export interface ClaudeProviderOptions {
   /** Claude desktop's Code-tab session store. */
   desktopDir?: string;
   /** Claude Code config directory holding the `sessions/` process registry. */
   configDir?: string;
+  /** Where plugins/monitor-hooks writes terminal session events. */
+  hooksDir?: string;
   desktopRunning?: () => Promise<boolean>;
   processAlive?: (pid: number) => boolean;
   pollMs?: number;
@@ -36,6 +40,7 @@ export class ClaudeProvider implements SessionProvider {
   readonly id = 'claude' as const;
   readonly desktopDir: string;
   readonly registryDir: string;
+  readonly hooksDir: string;
   private callbacks: ObserverCallbacks | null = null;
   private tracked = new Set<string>();
   private connected: boolean | null = null;
@@ -54,6 +59,10 @@ export class ClaudeProvider implements SessionProvider {
       options.configDir || process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'),
       'sessions',
     );
+    this.hooksDir =
+      options.hooksDir ||
+      process.env.MONITOR_CLAUDE_HOOKS_DIR ||
+      join(homedir(), 'Library', 'Application Support', 'Monitor', 'claude-hooks');
   }
   async start(callbacks: ObserverCallbacks) {
     this.callbacks = callbacks;
@@ -65,7 +74,7 @@ export class ClaudeProvider implements SessionProvider {
     });
     await this.refresh();
     if (this.stopped) return;
-    for (const dir of [this.desktopDir, this.registryDir]) {
+    for (const dir of [this.desktopDir, this.registryDir, this.hooksDir]) {
       try {
         const watcher = watch(dir, { recursive: true }, () => this.refreshSoon());
         watcher.on('error', () => watcher.close());
@@ -103,33 +112,54 @@ export class ClaudeProvider implements SessionProvider {
   private async observe() {
     const running = await (this.options.desktopRunning ?? claudeDesktopRunning)();
     if (this.stopped) return;
-    let records: DesktopRecord[];
+    let records: DesktopRecord[] = [],
+      desktopProblem: string | null = null;
     try {
       records = readDesktopRecords(this.desktopDir);
     } catch (error) {
-      const missing = (error as NodeJS.ErrnoException).code === 'ENOENT';
-      this.health(
-        running ? 'degraded' : 'offline',
-        missing
-          ? 'No Claude desktop Code sessions found. Open the Code tab in Claude first.'
-          : `Could not read Claude desktop sessions: ${(error as Error).message}`,
-      );
-      return;
+      desktopProblem =
+        (error as NodeJS.ErrnoException).code === 'ENOENT'
+          ? 'No Claude desktop Code sessions found'
+          : `Could not read Claude desktop sessions: ${(error as Error).message}`;
     }
-    const live = running
-      ? readLiveProcesses(this.registryDir, this.options.processAlive ?? processAlive)
-      : new Map();
+    const live = readLiveProcesses(this.registryDir, this.options.processAlive ?? processAlive);
+    const hooks = readHookSessions(this.hooksDir);
     const now = Date.now();
     const sessions: Session[] = records
       .filter((record) => !record.archived || this.tracked.has(record.sessionId))
-      .map((record) => sessionFromRecord(record, live.get(record.sessionId), running, now));
-    if (running) this.lastObservedAt = now;
+      .map((record) =>
+        sessionFromRecord(
+          record,
+          // A desktop session resumed with `claude --resume` runs as a terminal process.
+          live.desktop.get(record.sessionId) ??
+            (record.cliSessionId ? live.terminal.get(record.cliSessionId) : undefined),
+          running,
+          now,
+        ),
+      );
+    // Terminal sessions: hook-reported or live CLI processes, plus any already followed.
+    const desktopCli = new Set(records.map((r) => r.cliSessionId));
+    const terminal = new Set([
+      ...[...hooks.values()].filter((h) => h.entrypoint === 'cli').map((h) => h.sessionId),
+      ...live.terminal.keys(),
+      ...[...this.tracked].filter((id) => id.startsWith('cli_')).map((id) => id.slice(4)),
+    ]);
+    let terminals = 0;
+    for (const id of terminal)
+      if (!desktopCli.has(id)) {
+        sessions.push(sessionFromTerminal(id, hooks.get(id), live.terminal.get(id), now));
+        terminals++;
+      }
+    if (running || live.terminal.size) this.lastObservedAt = now;
     // Offline health first so the service drops its baseline before the
     // unavailable states; reconnect then re-baselines without replaying results.
     if (!running && this.connected !== false)
       this.health('offline', 'Claude desktop is not running');
     this.callbacks?.sessions(sessions);
-    if (running) this.health('live', 'Reading Claude desktop · local Code sessions');
+    const terminalNote = terminals ? ` · ${terminals} terminal` : '';
+    if (running && desktopProblem) this.health('degraded', desktopProblem + terminalNote);
+    else if (running) this.health('live', `Reading Claude desktop${terminalNote}`);
+    else if (terminals) this.health('degraded', `Claude desktop is not running${terminalNote}`);
     this.connected = running;
   }
   private health(state: 'live' | 'degraded' | 'offline', message: string) {
@@ -141,9 +171,15 @@ export class ClaudeProvider implements SessionProvider {
     });
   }
   track(externalIds: string[]) {
-    this.tracked = new Set(externalIds.filter(validSessionId));
+    this.tracked = new Set(
+      externalIds.filter(
+        (id) => validSessionId(id) || (id.startsWith('cli_') && validCliSessionId(id.slice(4))),
+      ),
+    );
   }
   sessionUrl(externalId: string) {
+    if (externalId.startsWith('cli_'))
+      throw new Error('Terminal sessions have no Claude desktop page; copy the resume command.');
     if (!validSessionId(externalId)) throw new Error('Invalid Claude session id.');
     return `claude://code/continue?session=${encodeURIComponent(externalId)}`;
   }

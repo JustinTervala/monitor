@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
   Menu,
@@ -126,12 +127,13 @@ if (gotLock)
           if (!Notification.isSupported()) return;
           const notification = new Notification({ title: event.title, body: event.body });
           notifications.add(notification);
-          notification.on(
-            'click',
-            () =>
-              void openSession(event.sessionId).catch((error) =>
-                dialog.showErrorBox('Could not open session', String(error)),
-              ),
+          notification.on('click', () =>
+            // Terminal sessions have no app page; show Monitor, which offers the resume command.
+            service?.canOpen(event.sessionId)
+              ? void openSession(event.sessionId).catch((error) =>
+                  dialog.showErrorBox('Could not open session', String(error)),
+                )
+              : void showWindow(),
           );
           notification.on('close', () => notifications.delete(notification));
           notification.on('failed', () => notifications.delete(notification));
@@ -150,6 +152,14 @@ if (gotLock)
         validateSender(event);
         if (typeof id !== 'string' || id.length > 256) throw new Error('Invalid session id.');
         await openSession(id);
+      });
+      ipcMain.handle('monitor:copy-resume', (event, id) => {
+        validateSender(event);
+        if (typeof id !== 'string' || id.length > 256) throw new Error('Invalid session id.');
+        // Built from observed state, never from renderer-supplied text.
+        const command = service!.resumeCommand(id);
+        clipboard.writeText(command);
+        return command;
       });
       ipcMain.handle('monitor:refresh', async (event) => {
         validateSender(event);

@@ -1,0 +1,16 @@
+{
+  "name": "monitor",
+  "owner": {
+    "name": "Justin Tervala"
+  },
+  "metadata": {
+    "description": "Monitor's Claude Code integration"
+  },
+  "plugins": [
+    {
+      "name": "monitor-hooks",
+      "source": "./plugins/monitor-hooks",
+      "description": "Report Claude Code turn results to Monitor"
+    }
+  ]
+}

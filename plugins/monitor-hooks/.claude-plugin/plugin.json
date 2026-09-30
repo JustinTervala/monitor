@@ -1,0 +1,8 @@
+{
+  "name": "monitor-hooks",
+  "displayName": "Monitor hooks",
+  "version": "0.1.0",
+  "description": "Records Claude Code session starts, turn results and exits for the local Monitor app. Never records prompt or response text.",
+  "author": { "name": "Justin Tervala" },
+  "license": "MIT"
+}
