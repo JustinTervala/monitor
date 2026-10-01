@@ -356,15 +356,21 @@ h1 {
   flex-shrink: 0;
 }
 .section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   border: 0;
   background: transparent;
   padding: 0;
   font: inherit;
   color: inherit;
 }
-.section-toggle span {
-  display: inline-block;
-  width: 12px;
+.section-chevron {
+  display: block;
+  flex-shrink: 0;
+}
+.section-toggle[aria-expanded='true'] .section-chevron {
+  transform: rotate(90deg);
 }
 .stale-label {
   color: var(--muted);

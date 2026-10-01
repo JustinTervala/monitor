@@ -305,7 +305,7 @@ try {
   assert.deepEqual(await page.locator('.queue-section h2').allTextContents(), [
     'Needs review',
     'Running',
-    '⌄ Read',
+    'Read',
   ]);
   // Observe the navigation call without launching an invented Codex session.
   await app.evaluate(({ shell }) => {

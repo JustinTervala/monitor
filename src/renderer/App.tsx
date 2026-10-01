@@ -477,7 +477,22 @@ export function App() {
                               aria-controls="read-workstreams"
                               onClick={() => setReadExpanded((value) => !value)}
                             >
-                              <span aria-hidden>{expanded ? '⌄' : '›'}</span> Read
+                              <svg
+                                className="section-chevron"
+                                width="12"
+                                height="12"
+                                viewBox="0 0 12 12"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                aria-hidden="true"
+                                focusable="false"
+                              >
+                                <path d="M4.5 3 7.5 6 4.5 9" />
+                              </svg>
+                              Read
                             </button>
                           ) : (
                             sectionLabels[section]
