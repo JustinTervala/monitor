@@ -288,42 +288,33 @@ export function App() {
         <span>MONITOR</span>
         <span>YOUR ATTENTION, IN ORDER</span>
       </div>
-      <nav className="page-nav" aria-label="Monitor pages">
-        <button
-          aria-current={page === 'queue' ? 'page' : undefined}
-          onClick={() => navigate('queue')}
-        >
-          Queue <span>{activeGroups.length}</span>
-        </button>
-        <button
-          aria-current={page === 'archive' ? 'page' : undefined}
-          onClick={() => navigate('archive')}
-        >
-          <ArchiveIcon /> Archived <span>{archivedCount}</span>
-        </button>
-      </nav>
       <header className="page-header">
-        <div>
-          <div className="eyebrow">{page === 'queue' ? 'WORKSTREAMS' : 'PROJECTS & HISTORY'}</div>
-          <h1>
-            {page === 'queue' ? 'Your queue' : 'Archived'}
-            <span className="heading-dot">.</span>
-          </h1>
-          {page === 'queue' ? (
-            <p>
-              {reviewCount
-                ? `${reviewCount} ${reviewCount === 1 ? 'workstream needs' : 'workstreams need'} you`
-                : 'Room to focus'}
-              <span className="separator">/</span>
-              {runningCount} running
-            </p>
-          ) : (
-            <p>
-              {archivedCount} {archivedCount === 1 ? 'workstream' : 'workstreams'} put away{' '}
-              <span className="separator">/</span> Ready when you need them
-            </p>
-          )}
-        </div>
+        <h1 className="sr-only">{page === 'queue' ? 'Your queue.' : 'Archived.'}</h1>
+        <nav className="page-nav" aria-label="Monitor pages">
+          <button
+            aria-current={page === 'queue' ? 'page' : undefined}
+            onClick={() => navigate('queue')}
+          >
+            Queue <span>{activeGroups.length}</span>
+          </button>
+          <button
+            aria-current={page === 'archive' ? 'page' : undefined}
+            onClick={() => navigate('archive')}
+          >
+            <ArchiveIcon /> Archived <span>{archivedCount}</span>
+          </button>
+        </nav>
+        {page === 'queue' ? (
+          <p>
+            {reviewCount} need review
+            <span className="separator">·</span>
+            {runningCount} running
+          </p>
+        ) : (
+          <p>
+            {archivedCount} archived {archivedCount === 1 ? 'workstream' : 'workstreams'}
+          </p>
+        )}
       </header>
       <div className="toolbar">
         <label className="search">
