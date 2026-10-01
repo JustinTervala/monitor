@@ -1,6 +1,14 @@
-import type { Command, MonitorState, QueueSection, Session, TaskGroup } from './types';
+import type {
+  Command,
+  MonitorState,
+  QueueSection,
+  Session,
+  SessionStatus,
+  TaskGroup,
+} from './types';
 
-export const sectionOrder: QueueSection[] = ['review', 'running', 'unknown', 'read', 'snoozed'];
+export const statusOrder: SessionStatus[] = ['review', 'running', 'read', 'unknown'];
+export const sectionOrder: QueueSection[] = [...statusOrder, 'snoozed'];
 export const sectionLabels: Record<QueueSection, string> = {
   review: 'Needs review',
   running: 'Running',
@@ -28,11 +36,7 @@ export function groupSection(
 ): QueueSection {
   if (isSnoozed(group, now)) return 'snoozed';
   const sessions = groupSessions(state, group);
-  return (
-    (['review', 'running', 'unknown', 'read'].find((status) =>
-      sessions.some((s) => s.status === status),
-    ) as QueueSection) || 'unknown'
-  );
+  return statusOrder.find((status) => sessions.some((s) => s.status === status)) || 'unknown';
 }
 export function groupProject(state: MonitorState, group: TaskGroup) {
   if (group.projectOverride)

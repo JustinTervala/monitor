@@ -254,6 +254,32 @@ try {
   const discovered = await page.evaluate(() => window.monitor.snapshot());
   assert.deepEqual(discovered.state.groups.slice(0, 2), snapshot.state.groups);
   assert.deepEqual(discovered.state.groups[2].sessionIds, ['codex:dddddd']);
+  // A task without runtime evidence belongs below Read in the visible queue.
+  for (const client of clients)
+    client.write(
+      frame({
+        type: 'broadcast',
+        method: 'thread-stream-state-changed',
+        version: 11,
+        sourceClientId: 'fixture',
+        params: {
+          hostId: 'local',
+          conversationId: 'dddddd',
+          change: {
+            type: 'snapshot',
+            revision: 2,
+            conversationState: { id: 'dddddd' },
+          },
+        },
+      }),
+    );
+  await page.getByRole('region', { name: 'Status unavailable', exact: true }).waitFor();
+  assert.deepEqual(await page.locator('.queue-section h2').allTextContents(), [
+    'Needs review',
+    'Running',
+    'Read',
+    'Status unavailable',
+  ]);
   // Observe the navigation call without launching an invented Codex session.
   await app.evaluate(({ shell }) => {
     globalThis.monitorOpened = [];

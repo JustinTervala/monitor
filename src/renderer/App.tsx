@@ -7,6 +7,7 @@ import {
   projectTag,
   sectionLabels,
   sectionOrder,
+  statusOrder,
 } from '../shared/queue';
 import type { Command, Session, Snapshot, TaskGroup } from '../shared/types';
 import { ArchiveIcon, ArchivePage } from './ArchivePage';
@@ -32,7 +33,7 @@ function snoozeLabel(group: TaskGroup) {
     : 'Until you restore it';
 }
 function counts(sessions: Session[]) {
-  return ['review', 'running', 'unknown', 'read']
+  return statusOrder
     .flatMap((status) => {
       const count = sessions.filter((s) => s.status === status).length;
       return count
@@ -210,7 +211,7 @@ export function App() {
       .filter((session) => primary(session))
       .sort(
         (a, b) =>
-          sectionOrder.indexOf(a.status) - sectionOrder.indexOf(b.status) ||
+          statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status) ||
           b.updatedAt - a.updatedAt,
       )[0];
     const destination = nextTask && primary(nextTask);

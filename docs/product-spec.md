@@ -31,14 +31,14 @@ For a group that is not snoozed, the highest section represented by any member d
 
 1. **Needs review:** a session has a new result or otherwise needs the user's attention.
 2. **Running:** at least one session is working and no session currently needs attention.
-3. **Status unavailable:** a member lacks current source evidence and no member is running or needs attention.
-4. **Read:** all members have source read receipts and no session is running or needs attention.
+3. **Read:** at least one member is acknowledged and no member is running or needs attention. Other members may still have unavailable status.
+4. **Status unavailable:** no member has review, running, or read status; current source evidence is unavailable.
 
 Example: a group containing a review task, a running task, and a read task appears only in Needs review. After the review item is acknowledged, the group moves to Running. The group's identity and saved priority are unchanged.
 
 Task states are read-only in Monitor. There is no per-task status dropdown. Runtime state comes from the harness. Read/acknowledgment is separate from execution state; Codex supplies the authoritative read receipt. Opening and reading the task in Codex updates Monitor. Claude exposes no readable receipt; opening the session in Claude after its result is used as acknowledgment instead.
 
-Waiting for approval, waiting for input, errors, and disconnected observers must remain distinguishable in the task details. An observer losing contact is not evidence of task completion. Unknown state has its own section between Running and Read.
+Waiting for approval, waiting for input, errors, and disconnected observers must remain distinguishable in the task details. An observer losing contact is not evidence of task completion. Unknown state has its own section below Read and above Snoozed. Placing a mixed group in Read never changes an unavailable member's state or invents a read receipt.
 
 ## Relative priority
 

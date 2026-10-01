@@ -64,7 +64,7 @@ After updating this checkout, rerun the installer and restart Codex. Remove the 
 Monitor uses the Midnight theme: dark blue surfaces and periwinkle accents. Statuses use both color and shape: amber diamond for **Needs review**, blue filled circle for **Running**, slate ring for **Read**, violet square for **Status unavailable**, and pale pause bars for **Snoozed**. Text labels remain alongside these markers.
 
 - All non-archived tasks in the local Codex catalog and Claude Code tab appear automatically, including tasks created while Monitor is running. There is no import step or task-count limit. Codex discovery refreshes every second; Claude every three seconds.
-- Use **Open Codex** / **Open Claude** directly on a queue row to open the task in one click. For a group, the shortcut picks a task needing review first, then running, unavailable, and read; the most recent task wins ties. Hover to see the exact task. Terminal Claude tasks offer **Show in iTerm** or **Resume in iTerm**. Select the row itself to inspect or manage all its tasks.
+- Use **Open Codex** / **Open Claude** directly on a queue row to open the task in one click. For a group, the shortcut picks a task needing review first, then running, read, and unavailable; the most recent task wins ties. Hover to see the exact task. Terminal Claude tasks offer **Show in iTerm** or **Resume in iTerm**. Select the row itself to inspect or manage all its tasks.
 - Drag a row onto another row and name the combined workstream. One group occupies one row.
 - Drag the **⠿ handle** to reorder. The **Priority** view shows the global order across sections; arrow buttons in details provide keyboard-accessible ordering.
 - **Edit group** changes its name or project tag. **Detach** splits out a member. Use group snoozing to put a workstream aside.
@@ -73,7 +73,7 @@ Monitor uses the Midnight theme: dark blue surfaces and periwinkle accents. Stat
 - **Archive workstream** moves the whole group to the separate **Archived** page. Browse collapsible projects with workstreams sorted by their latest task activity, or search by name, task, or directory. Archiving is local to Monitor; Codex stays unchanged.
 - Archived groups keep their names, membership, and saved priority. Notifications pause and new activity stays archived. **Restore to queue** returns the group at its saved priority using current task states, without replaying past notifications. Archiving clears any previous snooze.
 
-Section precedence is **Needs review → Running → Status unavailable → Read**; Snoozed overrides placement. Relative priority remains stable across all these states. There is no task-status editor. The source apps own execution state and read receipts. Claude has no readable read receipt, so a Claude result counts as read once you open that session in Claude after it finishes (see [Claude integration](docs/claude-integration.md)).
+Section precedence is **Needs review → Running → Read → Status unavailable**; Snoozed overrides placement. A group containing both read and unavailable tasks appears in Read; its unavailable tasks retain their actual status. Relative priority remains stable across all these states. There is no task-status editor. The source apps own execution state and read receipts. Claude has no readable read receipt, so a Claude result counts as read once you open that session in Claude after it finishes (see [Claude integration](docs/claude-integration.md)).
 
 ## Notifications
 

@@ -37,6 +37,9 @@ test('group precedence and section changes preserve global priority', () => {
   merged.sessions['codex:bbbbbb'].status = 'read';
   assert.equal(groupSection(merged, merged.groups[0]), 'running');
   merged.sessions['codex:aaaaaa'].status = 'unknown';
+  assert.equal(groupSection(merged, merged.groups[0]), 'read');
+  assert.equal(merged.sessions['codex:aaaaaa'].status, 'unknown');
+  merged.sessions['codex:bbbbbb'].status = 'unknown';
   assert.equal(groupSection(merged, merged.groups[0]), 'unknown');
   merged.sessions['codex:aaaaaa'].status = 'read';
   assert.equal(groupSection(merged, merged.groups[0]), 'read');
