@@ -176,6 +176,15 @@ try {
   assert.equal(await page.getByRole('dialog').count(), 0);
   assert.equal(await page.getByTestId('session-card').count(), 2);
   await page.getByRole('button', { name: 'Close details', exact: true }).click();
+  const priorityBeforeSearch = (await page.evaluate(() => window.monitor.snapshot())).state.groups;
+  await page.getByRole('textbox', { name: 'Filter workstreams' }).fill('paymnts billign');
+  assert.equal(await page.getByTestId('group-row').count(), 1);
+  await target.waitFor();
+  await page.getByRole('textbox', { name: 'Filter workstreams' }).fill('');
+  assert.deepEqual(
+    (await page.evaluate(() => window.monitor.snapshot())).state.groups,
+    priorityBeforeSearch,
+  );
   await target.getByTestId('open-task').click();
   assert.equal(
     (await app.evaluate(() => globalThis.monitorOpened)).at(-1),
@@ -338,6 +347,8 @@ try {
   assert.equal(await page.getByTestId('archive-row').filter({ visible: true }).count(), 1);
   await page.getByRole('textbox', { name: 'Filter workstreams' }).fill('billing');
   assert.equal(await page.getByTestId('archive-row').filter({ visible: true }).count(), 1);
+  assert.deepEqual(await archiveNames(), ['Billing rollout']);
+  await page.getByRole('textbox', { name: 'Filter workstreams' }).fill('reveiw billign');
   assert.deepEqual(await archiveNames(), ['Billing rollout']);
   await page.getByRole('textbox', { name: 'Filter workstreams' }).fill('no-matching-workstream');
   await page.getByRole('heading', { name: 'No matching workstreams' }).waitFor();
@@ -518,6 +529,8 @@ try {
   assert.equal(await history.getByTestId('library-row').count(), 70);
   await reopened.getByRole('textbox', { name: 'Filter workstreams' }).fill('Historical task 259');
   assert.equal(await reopened.getByTestId('library-row').count(), 1);
+  await reopened.getByRole('textbox', { name: 'Filter workstreams' }).fill('259 historiacl');
+  assert.equal(await reopened.getByTestId('library-row').count(), 1);
   await reopened
     .getByRole('button', { name: 'Open in Codex: Historical task 259', exact: true })
     .click();
@@ -575,6 +588,9 @@ try {
   );
   await reopened.getByRole('textbox', { name: 'Filter workstreams' }).fill('Historical task 259');
   await reopened.getByTestId('group-row').filter({ hasText: 'Historical task 259' }).waitFor();
+  await reopened.getByRole('textbox', { name: 'Filter workstreams' }).fill('259 historiacl');
+  await reopened.getByTestId('group-row').filter({ hasText: 'Historical task 259' }).waitFor();
+  assert.equal(await reopened.getByTestId('group-row').count(), 1);
   await reopened.getByRole('textbox', { name: 'Filter workstreams' }).fill('');
   await reopened.screenshot({ path: '.runtime/library-queue-smoke.png' });
   await reopened.getByRole('button', { name: /^Library / }).click();
@@ -673,7 +689,7 @@ try {
   assert.equal(await afterArchiveRestart.getByTestId('session-card').count(), 2);
   assert.deepEqual(errors, []);
   console.log(
-    'Electron smoke passed: Codex source archives hidden across views and restart, unarchive restores organization, Library backlog, pagination, promotion, collapsed Read, last-known placement, CLI desktop-first navigation, show/resume iTerm actions, one-click and keyboard navigation, group attention/recency selection, discovery, grouping, editing, snoozing, priority, Monitor archive, source immutability and persistence. Screenshots: .runtime/smoke.png, .runtime/archive-smoke.png and .runtime/cli-smoke.png',
+    'Electron smoke passed: typo-tolerant search across all pages, saved search order, Codex source archives hidden across views and restart, unarchive restores organization, Library backlog, pagination, promotion, collapsed Read, last-known placement, CLI desktop-first navigation, show/resume iTerm actions, one-click and keyboard navigation, group attention/recency selection, discovery, grouping, editing, snoozing, priority, Monitor archive, source immutability and persistence. Screenshots: .runtime/smoke.png, .runtime/archive-smoke.png and .runtime/cli-smoke.png',
   );
 } finally {
   await app?.close();

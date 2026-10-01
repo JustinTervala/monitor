@@ -12,6 +12,8 @@ Monitor helps the user schedule attention while preserving the existing harnesse
 
 All non-archived source tasks are discovered automatically into **Library**, including later discoveries. Library contains queued and explicitly archived groups too, organized by project and recency, with search across the entire collection. Show 20 rows per project initially and another 50 on request. No import or Add Task control is needed.
 
+All pages share typo-tolerant search across group names, task titles, project tags, and full or shortened directories. Matching ignores case and accents, supports literal fragments, and requires every query word in any order. Words of four to seven letters allow one insertion, deletion, substitution, or adjacent transposition; longer words allow two. Short terms and terms containing numbers stay literal. Search filters the existing priority or project/recency order without reordering workstreams.
+
 **Queue** starts with tasks active within the past seven days and any confirmed running or waiting for input. Older tasks start in Library. Genuine new turn activity or resumed execution brings a library group into the queue automatically, keeping its saved relative priority. Catalog refreshes, title/focus changes, and old read-receipt backfill do not count as new work. **Add to queue** is also available. The seven-day rule controls initial admission only; queued work is never evicted merely for becoming old.
 
 On upgrading an existing installation, old unnamed singletons move to Library. Names, membership, projects, relative order, snoozes, archives, and notification receipts are preserved. Named/grouped workstreams, custom projects, and snoozes retain queue membership.

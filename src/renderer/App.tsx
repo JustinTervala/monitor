@@ -15,6 +15,7 @@ import type { Command, MonitorState, Session, Snapshot, TaskGroup } from '../sha
 import { ArchiveIcon, LibraryPage } from './LibraryPage';
 import { ProviderIcon, RowProviders } from './ProviderIcon';
 import { displayDirectory } from './directory';
+import { createSearchMatcher } from './search';
 import { canResumeInTerminal, resumeCommand } from '../shared/resume';
 
 type Editor =
@@ -153,12 +154,15 @@ export function App() {
   const selectedIndex = state.groups.findIndex((g) => g.id === selected);
   const activeIndex = activeGroups.findIndex((g) => g.id === selected);
   const tracked = new Set(state.groups.flatMap((g) => g.sessionIds));
+  const matchesSearch = createSearchMatcher(search);
   const matches = (g: TaskGroup) =>
-    `${groupName(state, g)} ${projectTag(state, g)} ${groupSessions(state, g)
-      .map((s) => `${s.title} ${s.directory || ''} ${displayDirectory(s.directory, homeDirectory)}`)
-      .join(' ')}`
-      .toLowerCase()
-      .includes(search.toLowerCase());
+    matchesSearch(
+      `${groupName(state, g)} ${projectTag(state, g)} ${groupSessions(state, g)
+        .map(
+          (s) => `${s.title} ${s.directory || ''} ${displayDirectory(s.directory, homeDirectory)}`,
+        )
+        .join(' ')}`,
+    );
   const reviewCount = activeGroups.filter(
     (g) => !isSnoozed(g) && groupSessions(state, g).some((s) => s.status === 'review'),
   ).length;
