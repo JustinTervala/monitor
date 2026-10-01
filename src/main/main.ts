@@ -118,6 +118,9 @@ if (gotLock)
   app
     .whenReady()
     .then(async () => {
+      // Packaged builds use the bundle icon; development runs under Electron's bundle.
+      if (process.platform === 'darwin' && !app.isPackaged)
+        app.dock?.setIcon(join(__dirname, 'icon.png'));
       service = new MonitorService(
         new MonitorStore(join(app.getPath('userData'), 'monitor.sqlite')),
         [

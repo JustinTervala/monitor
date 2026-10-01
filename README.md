@@ -110,6 +110,8 @@ npm run probe:claude -- 300 # ...and log state transitions for five minutes
 
 The smoke test creates temporary source and Monitor databases; it does not edit your real queue. Screenshots are saved to `.runtime/smoke.png` and `.runtime/archive-smoke.png`.
 
+The app icon is [Watchkeeper, the monitor lizard](assets/icon-concepts/lizards/watchkeeper-v1.png). Development builds use the same artwork in the Dock. Packaging generates the full macOS icon set with the built-in `sips` and `iconutil` tools; no separate asset-generation step is needed. The original image-generation prompts are saved with the [icon concepts](assets/icon-concepts/lizards/prompts.json).
+
 See [architecture](docs/architecture.md), [product behavior](docs/product-spec.md), [Codex integration](docs/codex-integration.md), and [Claude integration](docs/claude-integration.md).
 
 ## License

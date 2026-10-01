@@ -1,6 +1,7 @@
 {
   "generator": "Built-in image_gen",
-  "purpose": "Monitor app icon concepts for selection; not installed as the app icon.",
+  "purpose": "Monitor app icon concepts; Watchkeeper selected as the app icon.",
+  "selected_for_app": "watchkeeper-v1.png",
   "concepts": [
     {
       "name": "01 — The Watchkeeper",

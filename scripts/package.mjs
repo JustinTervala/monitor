@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { checkNotices, packageLicenses } from './licenses.mjs';
+import { createMacIcon } from './icons.mjs';
 
 if (process.platform !== 'darwin') throw new Error('The first Monitor package targets macOS.');
 checkNotices();
@@ -35,6 +36,7 @@ try {
     electronVersion: JSON.parse(readFileSync('node_modules/electron/package.json', 'utf8')).version,
     appBundleId: 'local.monitor.desktop',
     appCategoryType: 'public.app-category.productivity',
+    icon: createMacIcon(workspace),
     // Required for macOS to ask before Monitor drives iTerm2 (Show/Resume in iTerm).
     extendInfo: {
       NSAppleEventsUsageDescription:

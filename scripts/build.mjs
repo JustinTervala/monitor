@@ -1,5 +1,8 @@
 import { build as bundle } from 'esbuild';
 import { build as viteBuild } from 'vite';
+import { copyRuntimeIcon } from './icons.mjs';
+
+copyRuntimeIcon('dist-electron');
 
 await bundle({
   entryPoints: ['src/main/main.ts'],

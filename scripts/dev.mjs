@@ -2,6 +2,9 @@ import { build } from 'esbuild';
 import { createServer } from 'vite';
 import { spawn } from 'node:child_process';
 import electron from 'electron';
+import { copyRuntimeIcon } from './icons.mjs';
+
+copyRuntimeIcon('dist-electron');
 
 await build({
   entryPoints: ['src/main/main.ts'],
