@@ -18,7 +18,7 @@ const now = Math.floor(Date.now() / 1000);
 for (const [id, title, cwd, updated] of [
   ['aaaaaa', 'Build the billing rollout', '/work/payments', now - 86400],
   ['bbbbbb', 'Review the billing changes', '/work/payments', now - 172800],
-  ['cccccc', 'Investigate streaming playback', '/work/media', now - 604800],
+  ['cccccc', 'Investigate streaming playback', '/work/media', now - 518400],
 ])
   db.prepare("INSERT INTO threads VALUES(?,?,?,'cli',0,?)").run(id, title, cwd, updated);
 db.close();
@@ -64,7 +64,7 @@ const server = createServer((socket) => {
                 revision: 1,
                 conversationState: {
                   id,
-                  hasUnreadTurn: id === 'bbbbbb',
+                  hasUnreadTurn: id === 'bbbbbb' || id === 'dddddd',
                   threadRuntimeStatus: { type: id === 'aaaaaa' ? 'active' : 'idle' },
                   turns: [
                     {
@@ -117,6 +117,17 @@ try {
   mkdirSync('.runtime', { recursive: true });
   await page.screenshot({ path: '.runtime/midnight-statuses.png' });
   assert.equal(await page.locator('select').count(), 0);
+  assert.equal(
+    await page.getByRole('button', { name: 'Read', exact: true }).getAttribute('aria-expanded'),
+    'false',
+  );
+  assert.equal(
+    await page
+      .getByTestId('group-row')
+      .filter({ hasText: 'Investigate streaming playback' })
+      .isVisible(),
+    false,
+  );
   assert.equal(await page.getByRole('button', { name: /Add tasks|Browse tasks/ }).count(), 0);
   // Queue shortcuts navigate directly without selecting a row or opening details.
   await app.evaluate(({ shell }) => {
@@ -254,7 +265,7 @@ try {
   const discovered = await page.evaluate(() => window.monitor.snapshot());
   assert.deepEqual(discovered.state.groups.slice(0, 2), snapshot.state.groups);
   assert.deepEqual(discovered.state.groups[2].sessionIds, ['codex:dddddd']);
-  // A task without runtime evidence belongs below Read in the visible queue.
+  // Missing runtime keeps last-known placement and is qualified inline.
   for (const client of clients)
     client.write(
       frame({
@@ -273,12 +284,19 @@ try {
         },
       }),
     );
-  await page.getByRole('region', { name: 'Status unavailable', exact: true }).waitFor();
+  await page
+    .getByTestId('group-row')
+    .filter({ hasText: 'A newly created task' })
+    .getByText('· Status unavailable', { exact: true })
+    .waitFor();
+  assert.equal(
+    await page.getByRole('region', { name: 'Status unavailable', exact: true }).count(),
+    0,
+  );
   assert.deepEqual(await page.locator('.queue-section h2').allTextContents(), [
     'Needs review',
     'Running',
-    'Read',
-    'Status unavailable',
+    '› Read',
   ]);
   // Observe the navigation call without launching an invented Codex session.
   await app.evaluate(({ shell }) => {
@@ -296,6 +314,7 @@ try {
   await page.screenshot({ path: '.runtime/smoke.png' });
   await page.getByRole('button', { name: 'Archive workstream', exact: true }).click();
   await page.getByRole('button', { name: 'Archive A newly created task', exact: true }).click();
+  await page.getByRole('button', { name: 'Read', exact: true }).click();
   await page
     .getByRole('button', { name: 'Archive Investigate streaming playback', exact: true })
     .click();
@@ -464,8 +483,117 @@ try {
     'Open Codex ↗',
   );
   await reopened.screenshot({ path: '.runtime/cli-smoke.png' });
+
+  // A large backlog is indexed without flooding the queue or mounting every row.
+  const oldCatalog = new DatabaseSync(join(home, 'state_5.sqlite'));
+  const addOld = oldCatalog.prepare("INSERT INTO threads VALUES(?,?,'/work/history','cli',0,?)");
+  for (let i = 0; i < 260; i++)
+    addOld.run(
+      `history-${String(i).padStart(3, '0')}`,
+      `Historical task ${i}`,
+      now - 30 * 86400 - i,
+    );
+  oldCatalog.close();
+  await reopened.evaluate(() => window.monitor.refresh());
+  await reopened.waitForFunction(
+    async () =>
+      Object.keys((await window.monitor.snapshot()).state.sessions).filter((id) =>
+        id.startsWith('codex:history-'),
+      ).length === 260,
+  );
+  const librarySnapshot = await reopened.evaluate(() => window.monitor.snapshot());
+  assert.equal(
+    librarySnapshot.state.groups.filter(
+      (g) => g.sessionIds[0].startsWith('codex:history-') && g.inQueue,
+    ).length,
+    0,
+  );
+  assert.equal(
+    await reopened.getByTestId('group-row').filter({ hasText: 'Historical task' }).count(),
+    0,
+  );
+  await reopened.getByRole('button', { name: /^Library / }).click();
+  const history = reopened.getByTestId('library-project').filter({ hasText: '/work/history' });
+  await history.waitFor();
+  assert.equal(await history.getByTestId('library-row').count(), 20);
+  await history.getByRole('button', { name: 'Show more · 240 remaining', exact: true }).click();
+  assert.equal(await history.getByTestId('library-row').count(), 70);
+  await reopened.getByRole('textbox', { name: 'Filter workstreams' }).fill('Historical task 259');
+  assert.equal(await reopened.getByTestId('library-row').count(), 1);
+  await reopened
+    .getByRole('button', { name: 'Open in Codex: Historical task 259', exact: true })
+    .click();
+  assert.deepEqual((await app.evaluate(() => globalThis.cliActions)).at(-1), [
+    'desktop',
+    'codex://threads/history-259',
+  ]);
+  await reopened
+    .getByRole('button', { name: 'Add Historical task 259 to queue', exact: true })
+    .click();
+  await reopened
+    .getByTestId('library-row')
+    .getByText(/In queue/)
+    .waitFor();
+  await reopened.getByRole('textbox', { name: 'Filter workstreams' }).fill('');
+  await reopened.screenshot({ path: '.runtime/library-smoke.png' });
+  // Observed activity returns another historical task automatically.
+  for (const client of clients)
+    client.write(
+      frame({
+        type: 'broadcast',
+        method: 'thread-stream-state-changed',
+        version: 11,
+        sourceClientId: 'fixture',
+        params: {
+          hostId: 'local',
+          conversationId: 'history-000',
+          change: {
+            type: 'snapshot',
+            revision: 2,
+            conversationState: {
+              id: 'history-000',
+              threadRuntimeStatus: { type: 'active' },
+              turns: [{ turnId: 'new-work', status: 'inProgress', turnStartedAtMs: Date.now() }],
+            },
+          },
+        },
+      }),
+    );
+  await reopened.waitForFunction(
+    async () =>
+      (await window.monitor.snapshot()).state.groups.find((g) =>
+        g.sessionIds.includes('codex:history-000'),
+      ).inQueue,
+  );
+  await reopened.getByRole('button', { name: /^Queue / }).click();
+  await reopened
+    .getByRole('region', { name: 'Running', exact: true })
+    .getByTestId('group-row')
+    .filter({ hasText: 'Historical task 0' })
+    .waitFor();
+  assert.equal(
+    await reopened.getByRole('button', { name: 'Read', exact: true }).getAttribute('aria-expanded'),
+    'false',
+  );
+  await reopened.getByRole('textbox', { name: 'Filter workstreams' }).fill('Historical task 259');
+  await reopened.getByTestId('group-row').filter({ hasText: 'Historical task 259' }).waitFor();
+  await reopened.getByRole('textbox', { name: 'Filter workstreams' }).fill('');
+  await reopened.screenshot({ path: '.runtime/library-queue-smoke.png' });
+  await reopened.getByRole('button', { name: /^Library / }).click();
+  await reopened.getByRole('textbox', { name: 'Filter workstreams' }).fill('Historical task 258');
+  await reopened.getByTestId('library-row').locator('.row-select').click();
+  await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0].setContentSize(650, 480),
+  );
+  await reopened.waitForFunction(() => window.innerWidth === 650);
+  assert.equal(
+    await reopened.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    true,
+  );
+  await reopened.screenshot({ path: '.runtime/library-narrow-smoke.png' });
+  assert.deepEqual(errors, []);
   console.log(
-    'Electron smoke passed: CLI desktop-first navigation, show/resume iTerm actions, one-click and keyboard navigation, group attention/recency selection, discovery, grouping, editing, snoozing, priority, archive, source immutability and persistence. Screenshots: .runtime/smoke.png, .runtime/archive-smoke.png and .runtime/cli-smoke.png',
+    'Electron smoke passed: Library backlog, pagination, promotion, collapsed Read, last-known placement, CLI desktop-first navigation, show/resume iTerm actions, one-click and keyboard navigation, group attention/recency selection, discovery, grouping, editing, snoozing, priority, archive, source immutability and persistence. Screenshots: .runtime/smoke.png, .runtime/archive-smoke.png and .runtime/cli-smoke.png',
   );
 } finally {
   await app?.close();

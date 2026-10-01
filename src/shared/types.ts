@@ -22,6 +22,9 @@ export interface Session {
   evidence: 'live' | 'history' | 'unavailable';
   /** Stable result/request identity, not an observation timestamp. */
   attentionKey: string | null;
+  /** Actual turn activity, not a title edit, focus, or catalog refresh. */
+  activityAt?: number;
+  awaitingInput?: boolean;
   archived: boolean;
   /** false when the source app has no exact-session route (e.g. a terminal session). */
   openable?: boolean;
@@ -44,15 +47,25 @@ export interface TaskGroup {
   archived: boolean;
   /** null = active; {until:null} = snoozed until explicitly restored. */
   snooze: { until: number | null } | null;
+  /** Automatic admission to the attention queue; Library always contains the group. */
+  inQueue: boolean;
 }
 
 export interface MonitorState {
-  version: 1;
+  version: 2;
   sessions: Record<string, Session>;
   /** Array position is global relative priority, regardless of section. */
   groups: TaskGroup[];
   notifications: boolean;
   notificationKeys: Record<string, string>;
+  observations: Record<
+    string,
+    {
+      firstSeenAt: number;
+      lastActivityAt: number;
+      lastKnown?: { status: Exclude<SessionStatus, 'unknown'>; observedAt: number };
+    }
+  >;
 }
 
 export interface ProviderHealth {

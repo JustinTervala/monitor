@@ -1,5 +1,12 @@
-import { useState } from 'react';
-import { archiveProjects, groupName, groupSessions, groupUpdatedAt } from '../shared/queue';
+import { useState, type ReactNode } from 'react';
+import {
+  archiveProjects,
+  libraryProjects,
+  isQueued,
+  groupName,
+  groupSessions,
+  groupUpdatedAt,
+} from '../shared/queue';
 import type { MonitorState, TaskGroup } from '../shared/types';
 
 export function ArchiveIcon() {
@@ -34,7 +41,9 @@ function activityDate(time: number) {
   });
 }
 
-export function ArchivePage({
+export function LibraryPage({
+  mode,
+  openAction,
   state,
   search,
   matches,
@@ -42,6 +51,8 @@ export function ArchivePage({
   select,
   restore,
 }: {
+  mode: 'library' | 'archive';
+  openAction: (group: TaskGroup) => ReactNode;
   state: MonitorState;
   search: string;
   matches: (group: TaskGroup) => boolean;
@@ -50,28 +61,39 @@ export function ArchivePage({
   restore: (group: TaskGroup) => void;
 }) {
   const [collapsed, setCollapsed] = useState(new Set<string>());
-  const projects = archiveProjects(state, matches);
+  const [limits, setLimits] = useState<Record<string, number>>({});
+  const projects =
+    mode === 'archive' ? archiveProjects(state, matches) : libraryProjects(state, matches);
   return (
-    <main className="queue archive-page" aria-label="Archived workstreams">
-      <div className="queue-hint">
-        By project, most recent activity first. Restore a workstream to bring it back to your queue.
-      </div>
+    <main
+      className="queue archive-page"
+      aria-label={mode === 'archive' ? 'Archived workstreams' : 'Task library'}
+    >
       {!projects.length && (
         <div className="empty-queue">
           <ArchiveIcon />
-          <h2>{search ? 'No matching workstreams' : 'A home for work you’ve put away.'}</h2>
+          <h2>
+            {search
+              ? 'No matching workstreams'
+              : mode === 'archive'
+                ? 'A home for work you’ve put away.'
+                : 'Your tasks appear automatically.'}
+          </h2>
           <p>
             {search
               ? 'Try a different name, task, or project.'
-              : 'Archive a workstream from your queue to keep it here. Its tasks stay in Codex.'}
+              : mode === 'archive'
+                ? 'Archive a workstream to keep it here.'
+                : 'Start a task in Codex or Claude to see it here.'}
           </p>
         </div>
       )}
       {projects.map((project) => {
         const expanded = Boolean(search) || !collapsed.has(project.key);
-        const panelId = `archive-${encodeURIComponent(project.key)}`;
+        const panelId = `${mode}-${encodeURIComponent(project.key)}`;
+        const limit = limits[project.key] || 20;
         return (
-          <section key={project.key} className="archive-project" data-testid="archive-project">
+          <section key={project.key} className="archive-project" data-testid={`${mode}-project`}>
             <h2>
               <button
                 className="project-heading"
@@ -113,14 +135,20 @@ export function ArchivePage({
               </button>
             </h2>
             <div id={panelId} hidden={!expanded}>
-              {project.groups.map((group) => {
+              {(mode === 'library'
+                ? expanded
+                  ? project.groups.slice(0, limit)
+                  : []
+                : project.groups
+              ).map((group) => {
                 const sessions = groupSessions(state, group);
                 const updatedAt = groupUpdatedAt(state, group);
                 const name = groupName(state, group);
+                const queued = isQueued(group);
                 return (
                   <div
                     key={group.id}
-                    data-testid="archive-row"
+                    data-testid={`${mode}-row`}
                     data-group-id={group.id}
                     className={`archive-row${selected === group.id ? ' selected' : ''}`}
                   >
@@ -128,6 +156,8 @@ export function ArchivePage({
                       <span className="row-name">
                         {name}
                         <span className="row-meta">
+                          {mode === 'library' &&
+                            `${group.archived ? 'Archived' : queued ? 'In queue' : 'In library'} · `}
                           {sessions.length} {sessions.length === 1 ? 'task' : 'tasks'} ·{' '}
                           {[
                             ...new Set(
@@ -148,16 +178,29 @@ export function ArchivePage({
                         {activityDate(updatedAt)}
                       </time>
                     </button>
-                    <button
-                      className="quiet restore-row"
-                      aria-label={`Restore ${name} to queue`}
-                      onClick={() => restore(group)}
-                    >
-                      Restore
-                    </button>
+                    {mode === 'library' && openAction(group)}
+                    {!queued && (
+                      <button
+                        className="quiet restore-row"
+                        aria-label={`${group.archived ? 'Restore' : 'Add'} ${name} to queue`}
+                        onClick={() => restore(group)}
+                      >
+                        {group.archived ? 'Restore' : 'Add to queue'}
+                      </button>
+                    )}
                   </div>
                 );
               })}
+              {mode === 'library' && expanded && project.groups.length > limit && (
+                <button
+                  className="quiet library-more"
+                  onClick={() =>
+                    setLimits((previous) => ({ ...previous, [project.key]: limit + 50 }))
+                  }
+                >
+                  Show more · {project.groups.length - limit} remaining
+                </button>
+              )}
             </div>
           </section>
         );

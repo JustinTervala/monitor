@@ -161,6 +161,10 @@ export function sessionFromProjection(base: Session, state: Projection, now = Da
     status,
     detail,
     attentionKey,
+    activityAt: Number(latest?.turnStartedAtMs) || undefined,
+    awaitingInput: Boolean(
+      request || flags.includes('waitingOnApproval') || flags.includes('waitingOnUserInput'),
+    ),
     observedAt: now,
     evidence: 'live',
   };

@@ -63,17 +63,20 @@ After updating this checkout, rerun the installer and restart Codex. Remove the 
 
 Monitor uses the Midnight theme: dark blue surfaces and periwinkle accents. Statuses use both color and shape: amber diamond for **Needs review**, blue filled circle for **Running**, slate ring for **Read**, violet square for **Status unavailable**, and pale pause bars for **Snoozed**. Text labels remain alongside these markers.
 
-- All non-archived tasks in the local Codex catalog and Claude Code tab appear automatically, including tasks created while Monitor is running. There is no import step or task-count limit. Codex discovery refreshes every second; Claude every three seconds.
+- **Library** automatically contains every discovered workstream, including queued and explicitly archived work. Browse by project and recency, search all tasks, and open them directly. Projects show 20 rows initially; **Show more** loads another 50. There is no import step or discovery limit. Codex refreshes every second; Claude every three seconds.
+- **Queue** initially includes tasks active within the last seven days, plus anything confirmed running or waiting for input. Older tasks start in Library. A new turn or resumed activity automatically brings a library workstream into the queue; simply loading old history, changing a title, or acknowledging an old result does not. **Add to queue** also brings older work forward immediately. The seven-day window applies to initial discovery, not automatic eviction of existing workstreams.
 - Use **Open Codex** / **Open Claude** directly on a queue row to open the task in one click. For a group, the shortcut picks a task needing review first, then running, read, and unavailable; the most recent task wins ties. Hover to see the exact task. Terminal Claude tasks offer **Show in iTerm** or **Resume in iTerm**. Select the row itself to inspect or manage all its tasks.
 - Drag a row onto another row and name the combined workstream. One group occupies one row.
 - Drag the **⠿ handle** to reorder. The **Priority** view shows the global order across sections; arrow buttons in details provide keyboard-accessible ordering.
 - **Edit group** changes its name or project tag. **Detach** splits out a member. Use group snoozing to put a workstream aside.
-- Existing groups, names, snoozes, and priority survive discovery and upgrades. Newly discovered tasks start as single-task rows at the end of your saved priority order.
+- Names, membership, snoozes, archives, and saved priority survive upgrades. On upgrading an existing installation, older unnamed singletons move into Library; named/grouped workstreams, custom projects, and snoozes stay organized. New tasks append to the saved order, including when initially placed in Library.
 - Snooze the whole workstream for an hour, until tomorrow at 9 AM local time, or until restored. Members keep executing and notifications pause.
 - **Archive workstream** moves the whole group to the separate **Archived** page. Browse collapsible projects with workstreams sorted by their latest task activity, or search by name, task, or directory. Archiving is local to Monitor; Codex stays unchanged.
 - Archived groups keep their names, membership, and saved priority. Notifications pause and new activity stays archived. **Restore to queue** returns the group at its saved priority using current task states, without replaying past notifications. Archiving clears any previous snooze.
 
-Section precedence is **Needs review → Running → Read → Status unavailable**; Snoozed overrides placement. A group containing both read and unavailable tasks appears in Read; its unavailable tasks retain their actual status. Relative priority remains stable across all these states. There is no task-status editor. The source apps own execution state and read receipts. Claude has no readable read receipt, so a Claude result counts as read once you open that session in Claude after it finishes (see [Claude integration](docs/claude-integration.md)).
+Section precedence is **Needs review → Running → Read**; Snoozed overrides placement. **Read** is collapsed by default and expands automatically when searching. The source apps own task states and read receipts; there is no task-status editor.
+
+Unavailable status is an inline indication, not a separate section. A workstream retains placement using its last observed states, with labels such as **Last seen running · Status unavailable**. This is explicitly historical: attention counts only include current observations, and no completion or read receipt is invented. Recent queued tasks with no known state remain visible as individual rows below Read. Reconnection replaces the stale display with current evidence. Claude results count as read once you open the source session after it finishes (see [Claude integration](docs/claude-integration.md)).
 
 ## Notifications
 
@@ -83,7 +86,7 @@ Use **Monitor → Test notification** to check native delivery on your Mac.
 
 Use the packaged app for native notification testing: Electron requires a valid app signature on current macOS notification APIs. `npm run dev` is for UI development. See [Electron's notification requirements](https://www.electronjs.org/docs/latest/tutorial/notifications#macos).
 
-Initial snapshots and reconnection backlogs are quiet. Result/request identities are persisted to suppress duplicates. Snooze expiry does not replay notifications for work that finished while snoozed. A task that finishes while already read in Codex may notify but remains in Read.
+Initial snapshots, library history, and reconnection backlogs are quiet. Result/request identities are persisted to suppress duplicates. Snooze expiry does not replay notifications for work that finished while snoozed. A task that finishes while already read in Codex may notify but remains in Read.
 
 ## Integration limits
 

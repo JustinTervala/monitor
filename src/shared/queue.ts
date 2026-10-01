@@ -17,12 +17,24 @@ export const sectionLabels: Record<QueueSection, string> = {
   snoozed: 'Snoozed',
 };
 export const emptyState = (): MonitorState => ({
-  version: 1,
+  version: 2,
   sessions: {},
   groups: [],
   notifications: true,
   notificationKeys: {},
+  observations: {},
 });
+export const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+export const isQueued = (group: TaskGroup) => group.inQueue && !group.archived;
+export const isCurrentlyActive = (session: Session) =>
+  session.evidence === 'live' && (session.status === 'running' || session.awaitingInput === true);
+export const initiallyQueued = (session: Session, now = Date.now()) =>
+  session.updatedAt >= now - RECENT_WINDOW_MS || isCurrentlyActive(session);
+/** Last known status affects placement only; the session itself remains unknown. */
+export const displayStatus = (state: MonitorState, session: Session): SessionStatus =>
+  session.status === 'unknown'
+    ? state.observations[session.id]?.lastKnown?.status || 'unknown'
+    : session.status;
 export const isSnoozed = (group: TaskGroup, now = Date.now()) =>
   group.snooze !== null && (group.snooze.until === null || group.snooze.until > now);
 export const groupSessions = (state: MonitorState, group: TaskGroup) =>
@@ -36,7 +48,10 @@ export function groupSection(
 ): QueueSection {
   if (isSnoozed(group, now)) return 'snoozed';
   const sessions = groupSessions(state, group);
-  return statusOrder.find((status) => sessions.some((s) => s.status === status)) || 'unknown';
+  return (
+    statusOrder.find((status) => sessions.some((s) => displayStatus(state, s) === status)) ||
+    'unknown'
+  );
 }
 export function groupProject(state: MonitorState, group: TaskGroup) {
   if (group.projectOverride)
@@ -65,12 +80,15 @@ export const groupUpdatedAt = (state: MonitorState, group: TaskGroup) =>
 
 /** A separate project/recency view; never changes saved queue priority. */
 export function archiveProjects(state: MonitorState, matches = (_group: TaskGroup) => true) {
+  return libraryProjects(state, (group) => group.archived && matches(group));
+}
+export function libraryProjects(state: MonitorState, matches = (_group: TaskGroup) => true) {
   const projects = new Map<
     string,
     ReturnType<typeof groupProject> & { groups: TaskGroup[]; updatedAt: number }
   >();
   for (const group of state.groups) {
-    if (!group.archived || !matches(group)) continue;
+    if (!matches(group)) continue;
     const project = groupProject(state, group);
     let section = projects.get(project.key);
     if (!section) {
@@ -96,6 +114,7 @@ export function newGroup(sessionId: string): TaskGroup {
     sessionIds: [sessionId],
     archived: false,
     snooze: null,
+    inQueue: true,
   };
 }
 
@@ -113,7 +132,7 @@ export function applyCommand(
   };
   const active = (id: string) => {
     const g = find(id);
-    if (g.archived) throw new Error('Restore this workstream to the queue first.');
+    if (!isQueued(g)) throw new Error('Restore this workstream to the queue first.');
     return g;
   };
   switch (command.type) {
@@ -161,9 +180,12 @@ export function applyCommand(
       g.snooze = null;
       break;
     }
-    case 'restore':
-      find(command.groupId).archived = false;
+    case 'restore': {
+      const group = find(command.groupId);
+      group.archived = false;
+      group.inQueue = true;
       break;
+    }
     case 'detach': {
       const g = find(command.groupId);
       if (g.sessionIds.length < 2 || !g.sessionIds.includes(command.sessionId))
@@ -172,6 +194,7 @@ export function applyCommand(
       next.groups.splice(next.groups.indexOf(g) + 1, 0, {
         ...newGroup(command.sessionId),
         archived: g.archived,
+        inQueue: g.inQueue,
       });
       break;
     }

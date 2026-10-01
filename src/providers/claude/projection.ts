@@ -15,6 +15,7 @@ export function sessionFromRecord(
     title: record.title || (record.cwd && basename(record.cwd)) || 'Untitled Claude task',
     directory: record.cwd,
     updatedAt: record.lastActivityAt ?? record.createdAt ?? 0,
+    activityAt: record.lastActivityAt ?? undefined,
     observedAt: now,
     archived: record.archived,
     openable: true,
@@ -37,14 +38,17 @@ export function sessionFromRecord(
   ): Session => ({ ...base, status, detail, attentionKey, evidence: 'live' });
 
   if (live?.status === 'waiting')
-    return observed(
-      'review',
-      live.waitingFor === 'permission prompt'
-        ? 'Waiting for approval in Claude'
-        : 'Waiting for your input in Claude',
-      // The registry stamps the moment the process entered this wait.
-      live.statusUpdatedAt ? `waiting:${live.statusUpdatedAt}` : null,
-    );
+    return {
+      ...observed(
+        'review',
+        live.waitingFor === 'permission prompt'
+          ? 'Waiting for approval in Claude'
+          : 'Waiting for your input in Claude',
+        // The registry stamps the moment the process entered this wait.
+        live.statusUpdatedAt ? `waiting:${live.statusUpdatedAt}` : null,
+      ),
+      awaitingInput: true,
+    };
   if (live?.status === 'busy' || live?.status === 'shell')
     return observed('running', 'Claude is working');
 
@@ -92,6 +96,12 @@ export function sessionFromTerminal(
       `${(directory && basename(directory)) || 'Claude'} · terminal ${sessionId.slice(0, 8)}`,
     directory,
     updatedAt: Math.max(0, ...times.map((t) => t ?? 0)),
+    activityAt: Math.max(
+      0,
+      hooks?.startedAt ?? 0,
+      hooks?.result?.at ?? 0,
+      live?.statusUpdatedAt ?? 0,
+    ),
     observedAt: now,
     archived: false,
     openable: false,
@@ -106,13 +116,16 @@ export function sessionFromTerminal(
   ): Session => ({ ...base, status, detail, attentionKey, evidence });
 
   if (live?.status === 'waiting')
-    return observed(
-      'review',
-      live.waitingFor === 'permission prompt'
-        ? 'Waiting for approval in the terminal'
-        : 'Waiting for your input in the terminal',
-      live.statusUpdatedAt ? `waiting:${live.statusUpdatedAt}` : null,
-    );
+    return {
+      ...observed(
+        'review',
+        live.waitingFor === 'permission prompt'
+          ? 'Waiting for approval in the terminal'
+          : 'Waiting for your input in the terminal',
+        live.statusUpdatedAt ? `waiting:${live.statusUpdatedAt}` : null,
+      ),
+      awaitingInput: true,
+    };
   if (live?.status === 'busy' || live?.status === 'shell')
     return observed('running', 'Claude is working in the terminal');
   const result = hooks?.result;

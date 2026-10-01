@@ -57,9 +57,20 @@ test('projection discards transcript and request payloads through snapshots and 
   const read = sessionFromProjection(session('aaaaaa'), { ...changed, hasUnreadTurn: false });
   assert.equal(read.status, 'read');
   assert.equal(read.attentionKey, observed.attentionKey);
+  assert.equal(read.activityAt, 1);
+  assert.equal(
+    sessionFromProjection(session('aaaaaa'), { ...changed, updatedAt: Date.now() }).activityAt,
+    1,
+  );
 });
 test('approval outranks running; missing runtime or read receipt stays unknown', () => {
   const base = session('aaaaaa');
+  assert.equal(
+    sessionFromProjection(base, {
+      threadRuntimeStatus: { type: 'active', activeFlags: ['waitingOnUserInput'] },
+    }).awaitingInput,
+    true,
+  );
   assert.equal(
     sessionFromProjection(base, {
       threadRuntimeStatus: { type: 'active', activeFlags: ['waitingOnApproval'] },

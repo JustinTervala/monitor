@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react';
 import {
+  displayStatus,
+  isQueued,
   groupName,
   groupSection,
   groupSessions,
@@ -9,8 +11,8 @@ import {
   sectionOrder,
   statusOrder,
 } from '../shared/queue';
-import type { Command, Session, Snapshot, TaskGroup } from '../shared/types';
-import { ArchiveIcon, ArchivePage } from './ArchivePage';
+import type { Command, MonitorState, Session, Snapshot, TaskGroup } from '../shared/types';
+import { ArchiveIcon, LibraryPage } from './LibraryPage';
 import { ProviderIcon } from './ProviderIcon';
 import { canResumeInTerminal, resumeCommand } from '../shared/resume';
 
@@ -33,17 +35,21 @@ function snoozeLabel(group: TaskGroup) {
     ? `Until ${new Date(group.snooze.until).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
     : 'Until you restore it';
 }
-function counts(sessions: Session[]) {
-  return statusOrder
-    .flatMap((status) => {
-      const count = sessions.filter((s) => s.status === status).length;
-      return count
-        ? [
-            `${count} ${status === 'review' ? 'review' : status === 'unknown' ? 'unavailable' : status}`,
-          ]
-        : [];
-    })
-    .join(' · ');
+function counts(state: MonitorState, sessions: Session[]) {
+  const values = new Map<string, number>();
+  for (const session of sessions) {
+    const status = displayStatus(state, session);
+    const label =
+      session.status === 'unknown'
+        ? status === 'unknown'
+          ? 'status unavailable'
+          : `last seen ${status === 'review' ? 'needing review' : status}`
+        : status === 'review'
+          ? 'review'
+          : status;
+    values.set(label, (values.get(label) || 0) + 1);
+  }
+  return [...values].map(([label, count]) => `${count} ${label}`).join(' · ');
 }
 
 export function App() {
@@ -55,7 +61,8 @@ export function App() {
   const [drag, setDrag] = useState<{ id: string; mode: 'merge' | 'move' } | null>(null);
   const [drop, setDrop] = useState<{ id: string; placement: 'before' | 'after' } | null>(null);
   const [priorityView, setPriorityView] = useState(false);
-  const [page, setPage] = useState<'queue' | 'archive'>('queue');
+  const [page, setPage] = useState<'queue' | 'library' | 'archive'>('queue');
+  const [readExpanded, setReadExpanded] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const revision = useRef(0);
   useEffect(() => {
@@ -139,8 +146,8 @@ export function App() {
       </main>
     );
   const { state, health } = snapshot;
-  const activeGroups = state.groups.filter((g) => !g.archived);
-  const archivedCount = state.groups.length - activeGroups.length;
+  const activeGroups = state.groups.filter(isQueued);
+  const archivedCount = state.groups.filter((g) => g.archived).length;
   const selectedGroup = state.groups.find((g) => g.id === selected);
   const selectedIndex = state.groups.findIndex((g) => g.id === selected);
   const activeIndex = activeGroups.findIndex((g) => g.id === selected);
@@ -151,10 +158,17 @@ export function App() {
       .join(' ')}`
       .toLowerCase()
       .includes(search.toLowerCase());
-  const reviewCount = activeGroups.filter((g) => groupSection(state, g) === 'review').length;
-  const runningCount = activeGroups.filter((g) => groupSection(state, g) === 'running').length;
+  const reviewCount = activeGroups.filter(
+    (g) => !isSnoozed(g) && groupSessions(state, g).some((s) => s.status === 'review'),
+  ).length;
+  const runningCount = activeGroups.filter(
+    (g) =>
+      !isSnoozed(g) &&
+      groupSessions(state, g).some((s) => s.status === 'running') &&
+      !groupSessions(state, g).some((s) => s.status === 'review'),
+  ).length;
   const codex = health.find((h) => h.provider === 'codex');
-  function navigate(next: 'queue' | 'archive') {
+  function navigate(next: 'queue' | 'library' | 'archive') {
     setPage(next);
     setSelected(null);
     setSearch('');
@@ -169,6 +183,7 @@ export function App() {
     if (await command({ type: 'restore', groupId: group.id })) {
       if (showInQueue) {
         navigate('queue');
+        setReadExpanded(true);
         setSelected(group.id);
       } else setSelected((id) => (id === group.id ? null : id));
     }
@@ -205,10 +220,8 @@ export function App() {
     setDrag(null);
     setDrop(null);
   }
-  function row(group: TaskGroup) {
-    const section = groupSection(state, group),
-      sessions = groupSessions(state, group);
-    const nextTask = sessions
+  function openAction(group: TaskGroup) {
+    const nextTask = groupSessions(state, group)
       .filter((session) => primary(session))
       .sort(
         (a, b) =>
@@ -216,6 +229,24 @@ export function App() {
           b.updatedAt - a.updatedAt,
       )[0];
     const destination = nextTask && primary(nextTask);
+    return (
+      destination && (
+        <button
+          className="open-row-action"
+          data-testid="open-task"
+          aria-label={`${destination.label}: ${nextTask.title}`}
+          title={`${destination.label}: ${nextTask.title}`}
+          onClick={() => void go(nextTask)}
+        >
+          <ProviderIcon provider={nextTask.provider} />
+          {destination.label.replace('Open in ', 'Open ')} <span aria-hidden>↗</span>
+        </button>
+      )
+    );
+  }
+  function row(group: TaskGroup) {
+    const section = groupSection(state, group),
+      sessions = groupSessions(state, group);
     const dropClass =
       drop?.id === group.id
         ? drag?.mode === 'merge'
@@ -250,11 +281,17 @@ export function App() {
           {state.groups.indexOf(group) + 1}
         </span>
         <button className="row-select" onClick={() => setSelected(group.id)}>
-          <span className={`status-dot ${section}`} aria-hidden="true" />
+          <span
+            className={`status-dot ${section}${sessions.some((s) => s.status === 'unknown') ? ' stale' : ''}`}
+            aria-hidden="true"
+          />
           <span className="row-name">
             {groupName(state, group)}
             <span className="row-meta">
-              {isSnoozed(group) ? snoozeLabel(group) : counts(sessions)}
+              {isSnoozed(group) ? snoozeLabel(group) : counts(state, sessions)}
+              {sessions.some(
+                (s) => s.status === 'unknown' && displayStatus(state, s) !== 'unknown',
+              ) && <span className="stale-label"> · Status unavailable</span>}
             </span>
           </span>
           <span className="project-tag">{projectTag(state, group)}</span>
@@ -262,18 +299,7 @@ export function App() {
             {sessions.length}
           </span>
         </button>
-        {destination && (
-          <button
-            className="open-row-action"
-            data-testid="open-task"
-            aria-label={`${destination.label}: ${nextTask.title}`}
-            title={`${destination.label}: ${nextTask.title}`}
-            onClick={() => void go(nextTask)}
-          >
-            <ProviderIcon provider={nextTask.provider} />
-            {destination.label.replace('Open in ', 'Open ')} <span aria-hidden>↗</span>
-          </button>
-        )}
+        {openAction(group)}
         <button
           className="quiet archive-row-action"
           title="Archive workstream"
@@ -292,13 +318,21 @@ export function App() {
         <span>YOUR ATTENTION, IN ORDER</span>
       </div>
       <header className="page-header">
-        <h1 className="sr-only">{page === 'queue' ? 'Your queue.' : 'Archived.'}</h1>
+        <h1 className="sr-only">
+          {page === 'queue' ? 'Your queue.' : page === 'library' ? 'Library.' : 'Archived.'}
+        </h1>
         <nav className="page-nav" aria-label="Monitor pages">
           <button
             aria-current={page === 'queue' ? 'page' : undefined}
             onClick={() => navigate('queue')}
           >
             Queue <span>{activeGroups.length}</span>
+          </button>
+          <button
+            aria-current={page === 'library' ? 'page' : undefined}
+            onClick={() => navigate('library')}
+          >
+            Library <span>{state.groups.length}</span>
           </button>
           <button
             aria-current={page === 'archive' ? 'page' : undefined}
@@ -315,7 +349,9 @@ export function App() {
           </p>
         ) : (
           <p>
-            {archivedCount} archived {archivedCount === 1 ? 'workstream' : 'workstreams'}
+            {page === 'library'
+              ? `${state.groups.length} workstreams`
+              : `${archivedCount} archived workstreams`}
           </p>
         )}
       </header>
@@ -324,7 +360,13 @@ export function App() {
           <span>⌕</span>
           <input
             aria-label="Filter workstreams"
-            placeholder={page === 'queue' ? 'Find a workstream…' : 'Search the archive…'}
+            placeholder={
+              page === 'queue'
+                ? 'Find a workstream…'
+                : page === 'library'
+                  ? 'Search all tasks…'
+                  : 'Search the archive…'
+            }
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -362,8 +404,11 @@ export function App() {
         </div>
       )}
       <div className={`workspace ${selectedGroup ? 'with-details' : ''}`}>
-        {page === 'archive' ? (
-          <ArchivePage
+        {page !== 'queue' ? (
+          <LibraryPage
+            key={page}
+            mode={page}
+            openAction={openAction}
             state={state}
             search={search}
             matches={matches}
@@ -387,28 +432,49 @@ export function App() {
                   (g) => groupSection(state, g) === section && matches(g),
                 );
                 if (!groups.length && section !== 'review' && section !== 'running') return null;
+                const expanded = section !== 'read' || readExpanded || Boolean(search.trim());
                 return (
                   <section
                     className={`queue-section section-${section}`}
                     key={section}
-                    aria-label={sectionLabels[section]}
+                    aria-label={section === 'unknown' ? undefined : sectionLabels[section]}
                   >
-                    <div className="section-heading">
-                      <span className={`status-dot ${section}`} aria-hidden="true" />
-                      <h2>{sectionLabels[section]}</h2>
-                      <span>{groups.length}</span>
-                    </div>
-                    {groups.length ? (
-                      groups.map(row)
-                    ) : (
-                      <div className="empty-section">
-                        {search
-                          ? 'No matching workstreams'
-                          : section === 'review'
-                            ? 'Nothing waiting for your attention.'
-                            : 'No workstreams running right now.'}
+                    {section !== 'unknown' && (
+                      <div className="section-heading">
+                        <span className={`status-dot ${section}`} aria-hidden="true" />
+                        <h2>
+                          {section === 'read' ? (
+                            <button
+                              className="section-toggle"
+                              aria-expanded={expanded}
+                              aria-controls="read-workstreams"
+                              onClick={() => setReadExpanded((value) => !value)}
+                            >
+                              <span aria-hidden>{expanded ? '⌄' : '›'}</span> Read
+                            </button>
+                          ) : (
+                            sectionLabels[section]
+                          )}
+                        </h2>
+                        <span>{groups.length}</span>
                       </div>
                     )}
+                    <div
+                      id={section === 'read' ? 'read-workstreams' : undefined}
+                      hidden={!expanded}
+                    >
+                      {groups.length ? (
+                        groups.map(row)
+                      ) : (
+                        <div className="empty-section">
+                          {search
+                            ? 'No matching workstreams'
+                            : section === 'review'
+                              ? 'Nothing waiting for your attention.'
+                              : 'No workstreams running right now.'}
+                        </div>
+                      )}
+                    </div>
                   </section>
                 );
               })
@@ -416,11 +482,13 @@ export function App() {
             {!activeGroups.length && (
               <div className="empty-queue">
                 <h2>
-                  {archivedCount ? 'Your queue is clear.' : 'Your tasks appear automatically.'}
+                  {state.groups.length
+                    ? 'Your queue is clear.'
+                    : 'Your tasks appear automatically.'}
                 </h2>
                 <p>
-                  {archivedCount
-                    ? 'Restore an archived workstream, or start a new task in Codex.'
+                  {state.groups.length
+                    ? 'Find older work in Library, or start a new task in Codex or Claude.'
                     : 'Open Codex and start a task. It will appear here on the next refresh.'}
                 </p>
               </div>
@@ -433,7 +501,9 @@ export function App() {
               <span className="eyebrow">
                 {selectedGroup.archived
                   ? 'ARCHIVED WORKSTREAM'
-                  : `WORKSTREAM · #${selectedIndex + 1}`}
+                  : isQueued(selectedGroup)
+                    ? `WORKSTREAM · #${selectedIndex + 1}`
+                    : 'LIBRARY WORKSTREAM'}
               </span>
               <button
                 className="icon-button"
@@ -449,7 +519,7 @@ export function App() {
               <button onClick={() => setEditor({ kind: 'rename', group: selectedGroup })}>
                 Edit group
               </button>
-              {!selectedGroup.archived && (
+              {isQueued(selectedGroup) && (
                 <>
                   <button
                     title="Increase global priority"
@@ -492,7 +562,9 @@ export function App() {
               <div className="session-card" key={session.id} data-testid="session-card">
                 <div className="session-status">
                   <span className={`status-dot ${session.status}`} aria-hidden="true" />
-                  {statusLabel[session.status]}
+                  {session.status === 'unknown' && displayStatus(state, session) !== 'unknown'
+                    ? `Last seen ${statusLabel[displayStatus(state, session)].toLowerCase()}`
+                    : statusLabel[session.status]}
                   <span className="provider-name">
                     <ProviderIcon provider={session.provider} />
                     {session.provider}
@@ -558,15 +630,19 @@ export function App() {
                 </div>
               </div>
             ))}
-            {selectedGroup.archived ? (
+            {!isQueued(selectedGroup) ? (
               <div className="archive-control">
                 <button className="primary" onClick={() => void restore(selectedGroup, true)}>
-                  Restore to queue
+                  {selectedGroup.archived ? 'Restore to queue' : 'Add to queue'}
                 </button>
-                <p>
-                  Archived in Monitor. Tasks stay in their source apps, and Monitor notifications
-                  are paused.
-                </p>
+                {!selectedGroup.archived && (
+                  <button
+                    className="archive-workstream"
+                    onClick={() => void archive(selectedGroup)}
+                  >
+                    <ArchiveIcon /> Archive workstream
+                  </button>
+                )}
               </div>
             ) : (
               <>

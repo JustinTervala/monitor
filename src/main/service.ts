@@ -1,5 +1,13 @@
 import { EventEmitter } from 'node:events';
-import { applyCommand, groupName, isSnoozed, newGroup } from '../shared/queue';
+import {
+  applyCommand,
+  groupName,
+  initiallyQueued,
+  isCurrentlyActive,
+  isQueued,
+  isSnoozed,
+  newGroup,
+} from '../shared/queue';
 import type { Command, MonitorState, ProviderHealth, Session, Snapshot } from '../shared/types';
 import type { SessionProvider } from '../providers/provider';
 import { MonitorStore } from './store';
@@ -25,6 +33,12 @@ export class MonitorService extends EventEmitter {
     super();
     this.state = store.read();
     for (const session of Object.values(this.state.sessions)) {
+      const observation = (this.state.observations[session.id] ??= {
+        firstSeenAt: session.observedAt || Date.now(),
+        lastActivityAt: session.activityAt || 0,
+      });
+      if (session.status !== 'unknown' && session.evidence !== 'unavailable')
+        observation.lastKnown = { status: session.status, observedAt: session.observedAt };
       session.status = 'unknown';
       session.evidence = 'unavailable';
       session.detail = 'Reconnecting to the source app';
@@ -51,26 +65,47 @@ export class MonitorService extends EventEmitter {
     this.scheduleWake();
   }
   private ingest(sessions: Session[]) {
-    // Discovery owns admission to the queue. Preserve every existing group and
-    // append new sessions so polling cannot reset names, snoozes or priority.
-    const grouped = new Set(this.state.groups.flatMap((group) => group.sessionIds));
+    // Discover everything; only recent work and observed activity enter the queue.
+    const grouped = new Map(
+      this.state.groups.flatMap((group) => group.sessionIds.map((id) => [id, group] as const)),
+    );
     let trackingChanged = false;
     for (const session of [...sessions].sort(
       (a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id),
     )) {
       if (session.archived || grouped.has(session.id)) continue;
-      this.state.groups.push(newGroup(session.id));
-      grouped.add(session.id);
+      const group = { ...newGroup(session.id), inQueue: initiallyQueued(session) };
+      this.state.groups.push(group);
+      grouped.set(session.id, group);
       trackingChanged = true;
     }
     let changed = trackingChanged;
     for (const session of sessions) {
       const old = this.state.sessions[session.id];
+      const observation = (this.state.observations[session.id] ??= {
+        firstSeenAt: Date.now(),
+        lastActivityAt: 0,
+      });
+      const group = grouped.get(session.id);
+      const activityAt = session.activityAt || 0;
+      if (
+        group &&
+        !group.archived &&
+        !group.inQueue &&
+        (isCurrentlyActive(session) ||
+          (activityAt > observation.lastActivityAt && activityAt >= observation.firstSeenAt))
+      ) {
+        group.inQueue = true;
+        changed = true;
+      }
+      observation.lastActivityAt = Math.max(observation.lastActivityAt, activityAt);
       const { observedAt: _oldTime, ...oldValue } = old || {};
       const { observedAt: _newTime, ...newValue } = session;
       if (old && JSON.stringify(oldValue) === JSON.stringify(newValue)) continue;
       changed = true;
       this.state.sessions[session.id] = session;
+      if (session.status !== 'unknown' && session.evidence !== 'unavailable')
+        observation.lastKnown = { status: session.status, observedAt: session.observedAt };
       if (session.evidence === 'unavailable') continue;
       const key = session.attentionKey;
       const firstObservation = !this.baselined.has(session.id);
@@ -86,13 +121,12 @@ export class MonitorService extends EventEmitter {
       // Remember even suppressed events: startup, snooze and notification toggles
       // must not replay old completions when they are lifted.
       this.state.notificationKeys[session.id] = key;
-      const group = this.state.groups.find((g) => g.sessionIds.includes(session.id));
       if (
         !firstObservation &&
         session.evidence === 'live' &&
         this.state.notifications &&
         group &&
-        !group.archived &&
+        isQueued(group) &&
         !isSnoozed(group)
       ) {
         // Persist the receipt before emitting the OS side effect (at-most-once).

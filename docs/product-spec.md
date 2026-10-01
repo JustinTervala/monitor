@@ -10,9 +10,13 @@ Monitor helps the user schedule attention while preserving the existing harnesse
 
 ## Groups and the queue
 
-All non-archived tasks discovered from the source apps appear automatically, both on startup and as new tasks are created. No manual import or Add Task control is needed. Existing memberships, group names, snoozes, and priority remain unchanged; newly discovered tasks append to the global order. Previously unimported tasks from older Monitor versions are included on the next discovery pass. Existing group members remain organized even if later archived in the source app.
+All non-archived source tasks are discovered automatically into **Library**, including later discoveries. Library contains queued and explicitly archived groups too, organized by project and recency, with search across the entire collection. Show 20 rows per project initially and another 50 on request. No import or Add Task control is needed.
 
-Every admitted task belongs to one workstream, either in the queue or archive. A standalone task appears as a single-task entry. Dragging one task onto another starts group creation and asks for a manually created name. A named group can contain sessions from both harnesses.
+**Queue** starts with tasks active within the past seven days and any confirmed running or waiting for input. Older tasks start in Library. Genuine new turn activity or resumed execution brings a library group into the queue automatically, keeping its saved relative priority. Catalog refreshes, title/focus changes, and old read-receipt backfill do not count as new work. **Add to queue** is also available. The seven-day rule controls initial admission only; queued work is never evicted merely for becoming old.
+
+On upgrading an existing installation, old unnamed singletons move to Library. Names, membership, projects, relative order, snoozes, archives, and notification receipts are preserved. Named/grouped workstreams, custom projects, and snoozes retain queue membership.
+
+Every admitted task belongs to one workstream, in the Library, optionally admitted to the queue or explicitly archived. A standalone task appears as a single-task entry. Dragging one task onto another starts group creation and asks for a manually created name. A named group can contain sessions from both harnesses.
 
 Each group appears exactly once in the queue, as a single row. Selecting the row reveals its individual sessions and their observed states in a detail view. Group membership never causes tasks to be duplicated across queue sections.
 
@@ -32,13 +36,13 @@ For a group that is not snoozed, the highest section represented by any member d
 1. **Needs review:** a session has a new result or otherwise needs the user's attention.
 2. **Running:** at least one session is working and no session currently needs attention.
 3. **Read:** at least one member is acknowledged and no member is running or needs attention. Other members may still have unavailable status.
-4. **Status unavailable:** no member has review, running, or read status; current source evidence is unavailable.
+   **Read** is collapsed by default and temporarily expands for search results.
 
 Example: a group containing a review task, a running task, and a read task appears only in Needs review. After the review item is acknowledged, the group moves to Running. The group's identity and saved priority are unchanged.
 
 Task states are read-only in Monitor. There is no per-task status dropdown. Runtime state comes from the harness. Read/acknowledgment is separate from execution state; Codex supplies the authoritative read receipt. Opening and reading the task in Codex updates Monitor. Claude exposes no readable receipt; opening the session in Claude after its result is used as acknowledgment instead.
 
-Waiting for approval, waiting for input, errors, and disconnected observers must remain distinguishable in the task details. An observer losing contact is not evidence of task completion. Unknown state has its own section below Read and above Snoozed. Placing a mixed group in Read never changes an unavailable member's state or invents a read receipt.
+Waiting for approval, waiting for input, errors, and disconnected observers must remain distinguishable in the task details. An observer losing contact is not evidence of task completion. There is no Status unavailable section. Persist the last-known status separately and use it only for stable section placement, clearly labeled as historical on the row and in details. Current attention totals exclude unavailable observations. Recent queued tasks without any last-known state remain visible as individual rows below Read. A disconnected member never gains an invented completion or read receipt.
 
 ## Relative priority
 
@@ -83,7 +87,7 @@ The concept supports one hour, tomorrow morning, or until explicitly unsnoozed. 
 
 ## Archive
 
-**Archived** is a separate page, organized by collapsible project sections. Archive a whole workstream using its row action or detail pane. This is a Monitor-only decision: source tasks remain unchanged, including their execution state and source archive flags. Existing queues remain active on upgrade; unavailable or old tasks are never automatically archived.
+**Archived** is a separate page, organized by collapsible project sections. Archive a whole workstream using its row action or detail pane. This is a Monitor-only decision: source tasks remain unchanged, including their execution state and source archive flags. Old tasks may start in Library, but nothing is automatically archived.
 
 - Archived workstreams keep one row, their names, membership, project overrides, and saved global priority. They are excluded from queue sections and attention counts.
 - Use full normalized source paths for project identity, displaying the leaf name and full path. Different paths with the same leaf stay separate. Manual project overrides group by their exact label; mixed and unknown projects have their own sections.
@@ -115,5 +119,5 @@ Snoozing controls Monitor's notifications. Managing duplicate notifications from
 ## Integration questions
 
 - Answered for Claude: only desktop Code-tab sessions are local and observable; ordinary chats are not represented. Exact navigation uses `claude://code/continue?session=`. Claude has no readable read receipt; see [Claude integration](claude-integration.md).
-- How should unknown/disconnected state be surfaced without claiming a task is running or complete?
+- Answered: qualified last-known placement and inline availability indicators, without changing provider state.
 - What does notification batching look like when several tasks in a group finish close together?

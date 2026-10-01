@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   applyCommand,
   archiveProjects,
+  libraryProjects,
   emptyState,
   groupSection,
   newGroup,
@@ -203,4 +204,17 @@ test('archive is grouped by full project identity and source recency, independen
   state.groups[0].sessionIds.push('codex:same-leaf');
   state.groups.splice(1, 1);
   assert.equal(archiveProjects(state)[0].key, 'multiple');
+});
+
+test('Library includes every group without changing queue membership or global order', () => {
+  const state = fixture();
+  state.groups[0].inQueue = false;
+  state.groups[1].archived = true;
+  const before = structuredClone(state);
+  assert.equal(libraryProjects(state).flatMap((p) => p.groups).length, 3);
+  assert.equal(archiveProjects(state).flatMap((p) => p.groups).length, 1);
+  assert.deepEqual(state, before);
+  const restored = applyCommand(state, { type: 'restore', groupId: state.groups[0].id });
+  assert.equal(restored.groups[0].inQueue, true);
+  assert.deepEqual(restored.sessions, before.sessions);
 });

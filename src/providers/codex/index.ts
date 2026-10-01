@@ -68,6 +68,7 @@ export class CodexProvider implements SessionProvider {
             status: 'unknown',
             evidence: 'unavailable',
             attentionKey: null,
+            awaitingInput: false,
             detail: 'Codex desktop disconnected; last known state is not current',
           }),
         );
@@ -204,6 +205,7 @@ export class CodexProvider implements SessionProvider {
           status: 'unknown',
           evidence: 'unavailable',
           attentionKey: null,
+          awaitingInput: false,
           detail: message,
         }),
       );

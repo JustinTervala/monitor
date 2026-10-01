@@ -139,6 +139,7 @@ export function sessionFromHooks(
       status: 'review',
       detail: 'Turn finished in Codex · read receipt unavailable',
       attentionKey: `result:${completion.turnId}`,
+      activityAt: completion.at,
       observedAt: now,
       updatedAt: Math.max(base.updatedAt, completion.at),
       evidence: completion.at >= startedAt ? 'live' : 'history',
@@ -150,6 +151,7 @@ export function sessionFromHooks(
       status: 'review',
       detail: 'Turn interrupted in Codex · read receipt unavailable',
       attentionKey: `result:${activity.turnId}`,
+      activityAt: activity.at,
       observedAt: now,
       updatedAt: Math.max(base.updatedAt, activity.at),
       evidence: activity.at >= startedAt ? 'live' : 'history',
@@ -159,6 +161,7 @@ export function sessionFromHooks(
     return {
       ...base,
       status: 'running',
+      activityAt: activity.at,
       detail: 'Recent Codex activity · observed by plugin',
       attentionKey: null,
       evidence: 'live',
@@ -168,6 +171,10 @@ export function sessionFromHooks(
   return {
     ...base,
     status: 'unknown',
+    activityAt:
+      activity.turnId && !['SessionStart', 'SessionEnd'].includes(activity.event)
+        ? activity.at
+        : base.activityAt,
     evidence: 'unavailable',
     attentionKey: null,
     detail:

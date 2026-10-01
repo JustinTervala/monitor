@@ -8,7 +8,7 @@ import { MonitorStore } from '../src/main/store';
 import type { ObserverCallbacks, SessionProvider } from '../src/providers/provider';
 import { session } from './helpers';
 import type { Session } from '../src/shared/types';
-import { emptyState, newGroup } from '../src/shared/queue';
+import { emptyState, groupSection, newGroup } from '../src/shared/queue';
 
 class FakeProvider implements SessionProvider {
   constructor(readonly id: SessionProvider['id'] = 'codex') {}
@@ -142,7 +142,12 @@ test('hook history is quiet, a later completion notifies once across hook and de
   });
   await service.start();
   provider.emit(
-    session('aaaaaa', { status: 'review', evidence: 'history', attentionKey: 'result:old' }),
+    session('aaaaaa', {
+      status: 'review',
+      evidence: 'history',
+      attentionKey: 'result:old',
+      updatedAt: Date.now(),
+    }),
   );
   assert.equal(notices.length, 0);
   assert.equal(service.snapshot().state.notificationKeys['codex:aaaaaa'], 'result:old');
@@ -192,6 +197,7 @@ test('upgrading an already initialized queue discovers omissions without resetti
     notifications: false,
     notificationKeys: { [a.id]: 'result:old' },
   };
+  Reflect.set(legacy, 'version', 1);
   Reflect.deleteProperty(legacy.groups[0], 'archived');
   store.write(legacy);
   const provider = new FakeProvider();
@@ -361,4 +367,141 @@ test('a Claude result in a snoozed or archived mixed-provider group updates quie
   assert.equal(notices.length, 1);
   assert.equal(notices[0].title, 'Billing');
   assert.match(notices[0].body, /^Claude · /);
+});
+
+test('Library baselines old tasks, promotes genuine activity, and never revives explicit archives', async (t) => {
+  const path = mkdtempSync(join(tmpdir(), 'monitor-library-'));
+  const database = join(path, 'state.sqlite');
+  const notices: NotificationEvent[] = [];
+  let provider = new FakeProvider();
+  let service = new MonitorService(new MonitorStore(database), [provider], (n) => notices.push(n));
+  t.after(() => {
+    service.stop();
+    rmSync(path, { recursive: true });
+  });
+  await service.start();
+  const old = Date.now() - 30 * 86400000;
+  const catalog = session('old-task', {
+    status: 'unknown',
+    evidence: 'unavailable',
+    updatedAt: old,
+  });
+  const recent = session('recent-task', {
+    status: 'unknown',
+    evidence: 'unavailable',
+    updatedAt: Date.now(),
+  });
+  const running = session('running-old', { updatedAt: old });
+  const waiting = session('waiting-old', { status: 'review', awaitingInput: true, updatedAt: old });
+  provider.emit(catalog, recent, running, waiting);
+  const get = (id: string) =>
+    service.snapshot().state.groups.find((g) => g.sessionIds.includes(`codex:${id}`))!;
+  assert.equal(get('old-task').inQueue, false);
+  assert.ok(['recent-task', 'running-old', 'waiting-old'].every((id) => get(id).inQueue));
+  const oldResult = {
+    ...catalog,
+    status: 'review' as const,
+    evidence: 'live' as const,
+    activityAt: old,
+    attentionKey: 'result:old',
+  };
+  provider.emit(oldResult);
+  assert.equal(get('old-task').inQueue, false, 'history backfill is not new activity');
+  provider.emit({ ...oldResult, status: 'read', updatedAt: Date.now() });
+  assert.equal(get('old-task').inQueue, false, 'focus/catalog changes do not promote');
+  assert.equal(notices.length, 0);
+  const groupId = get('old-task').id;
+  const order = service.snapshot().state.groups.map((g) => g.id);
+  service.stop();
+  provider = new FakeProvider();
+  service = new MonitorService(new MonitorStore(database), [provider], (n) => notices.push(n));
+  await service.start();
+  provider.emit(oldResult);
+  assert.equal(get('old-task').inQueue, false, 'reconnection and restart do not promote history');
+  const finishedWhileAway = { ...oldResult, activityAt: Date.now(), attentionKey: 'result:new' };
+  provider.emit(finishedWhileAway);
+  assert.equal(get('old-task').inQueue, true, 'a new turn can finish between observations');
+  assert.deepEqual(
+    service.snapshot().state.groups.map((g) => g.id),
+    order,
+  );
+  service.command({ type: 'archive', groupId });
+  provider.emit({ ...finishedWhileAway, status: 'running', activityAt: Date.now() + 1 });
+  assert.equal(get('old-task').archived, true);
+  service.command({ type: 'restore', groupId });
+  assert.equal(get('old-task').inQueue, true);
+  assert.equal(get('old-task').archived, false);
+});
+
+test('disconnect and restart preserve qualified last-known placement without changing source status', async (t) => {
+  const path = mkdtempSync(join(tmpdir(), 'monitor-last-known-'));
+  const database = join(path, 'state.sqlite');
+  let provider = new FakeProvider();
+  let service = new MonitorService(new MonitorStore(database), [provider], () => {});
+  t.after(() => {
+    service.stop();
+    rmSync(path, { recursive: true });
+  });
+  await service.start();
+  provider.emit(session('aaaaaa'));
+  const id = service.snapshot().state.groups[0].id;
+  provider.emit(session('aaaaaa', { status: 'unknown', evidence: 'unavailable' }));
+  let state = service.snapshot().state;
+  assert.equal(state.sessions['codex:aaaaaa'].status, 'unknown');
+  assert.equal(groupSection(state, state.groups[0]), 'running');
+  service.stop();
+  provider = new FakeProvider();
+  service = new MonitorService(new MonitorStore(database), [provider], () => {});
+  await service.start();
+  state = service.snapshot().state;
+  assert.equal(state.groups[0].id, id);
+  assert.equal(groupSection(state, state.groups[0]), 'running');
+  assert.equal(state.sessions['codex:aaaaaa'].status, 'unknown');
+  provider.emit(session('aaaaaa', { status: 'read', attentionKey: 'result:new' }));
+  state = service.snapshot().state;
+  assert.equal(groupSection(state, state.groups[0]), 'read');
+});
+
+test('one-time Library migration preserves organization, priority, archives and receipts', (t) => {
+  const path = mkdtempSync(join(tmpdir(), 'monitor-migration-'));
+  const store = new MonitorStore(join(path, 'state.sqlite'));
+  t.after(() => {
+    store.close();
+    rmSync(path, { recursive: true });
+  });
+  const state = emptyState();
+  const old = Date.now() - 30 * 86400000;
+  for (const id of ['old', 'named', 'snoozed', 'archived', 'recent', 'grouped']) {
+    const s = session(id, { updatedAt: id === 'recent' ? Date.now() : old });
+    state.sessions[s.id] = s;
+    state.groups.push(newGroup(s.id));
+  }
+  state.groups[1].name = 'Keep this workstream';
+  state.groups[1].projectOverride = 'Personal';
+  state.groups[2].snooze = { until: null };
+  state.groups[3].archived = true;
+  const member = session('member', { updatedAt: old });
+  state.sessions[member.id] = member;
+  state.groups[5].sessionIds.push(member.id);
+  state.notificationKeys[member.id] = 'result:seen';
+  const before = structuredClone(state);
+  Reflect.set(state, 'version', 1);
+  Reflect.deleteProperty(state, 'observations');
+  state.groups.forEach((g) => Reflect.deleteProperty(g, 'inQueue'));
+  store.write(state);
+  const upgraded = store.read();
+  assert.deepEqual(
+    upgraded.groups.map((g) => g.inQueue),
+    [false, true, true, true, true, true],
+  );
+  assert.deepEqual(
+    upgraded.groups.map(({ inQueue, ...rest }) => rest),
+    before.groups.map(({ inQueue, ...rest }) => rest),
+  );
+  assert.deepEqual(upgraded.sessions, before.sessions);
+  assert.deepEqual(upgraded.notificationKeys, before.notificationKeys);
+  // This is an initial admission policy, not rolling eviction of old queue entries.
+  upgraded.groups[0].inQueue = true;
+  store.write(upgraded);
+  assert.equal(store.read().groups[0].inQueue, true);
 });
