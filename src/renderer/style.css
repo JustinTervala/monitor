@@ -895,7 +895,4 @@ footer .quiet {
   .with-details .task-count {
     display: none;
   }
-  .titlebar > span:last-child {
-    display: none;
-  }
 }
