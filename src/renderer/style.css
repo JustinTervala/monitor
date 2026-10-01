@@ -614,11 +614,6 @@ h1 {
   width: 100%;
   font-size: 11px;
 }
-.snooze-control p {
-  font-size: 10px;
-  color: var(--muted);
-  margin-top: 7px;
-}
 .member-heading {
   display: flex;
   justify-content: space-between;
@@ -698,12 +693,6 @@ h1 {
 .session-actions button {
   font-size: 9px;
   padding: 5px 7px;
-}
-.source-note {
-  font-size: 10px;
-  color: var(--muted);
-  margin: 16px 0;
-  line-height: 1.6;
 }
 .error-banner {
   display: flex;

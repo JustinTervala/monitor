@@ -552,10 +552,6 @@ export function App() {
                 </div>
               </div>
             ))}
-            <p className="source-note">
-              Task states and read receipts come from the source app. An unavailable task may need
-              to be opened there before it exposes live state.
-            </p>
             {selectedGroup.archived ? (
               <div className="archive-control">
                 <button className="primary" onClick={() => void restore(selectedGroup, true)}>
@@ -599,7 +595,6 @@ export function App() {
                     <option value="tomorrow">Tomorrow at 9 AM</option>
                     <option value="manual">Until I restore it</option>
                   </select>
-                  <p>Tasks keep working. Monitor notifications pause for this group.</p>
                 </div>
                 <button className="archive-workstream" onClick={() => void archive(selectedGroup)}>
                   <ArchiveIcon /> Archive workstream
