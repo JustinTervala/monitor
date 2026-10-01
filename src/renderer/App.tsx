@@ -13,7 +13,7 @@ import {
 } from '../shared/queue';
 import type { Command, MonitorState, Session, Snapshot, TaskGroup } from '../shared/types';
 import { ArchiveIcon, LibraryPage } from './LibraryPage';
-import { ProviderIcon } from './ProviderIcon';
+import { ProviderIcon, RowProviders } from './ProviderIcon';
 import { canResumeInTerminal, resumeCommand } from '../shared/resume';
 
 type Editor =
@@ -238,8 +238,19 @@ export function App() {
           title={`${destination.label}: ${nextTask.title}`}
           onClick={() => void go(nextTask)}
         >
-          <ProviderIcon provider={nextTask.provider} />
-          {destination.label.replace('Open in ', 'Open ')} <span aria-hidden>↗</span>
+          <svg
+            width="17"
+            height="17"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M14 3h7v7M21 3L11 13M10 3H3v18h18v-7" />
+          </svg>
         </button>
       )
     );
@@ -285,6 +296,7 @@ export function App() {
             className={`status-dot ${section}${sessions.some((s) => s.status === 'unknown') ? ' stale' : ''}`}
             aria-hidden="true"
           />
+          <RowProviders providers={sessions.map((session) => session.provider)} />
           <span className="row-name">
             {groupName(state, group)}
             <span className="row-meta">

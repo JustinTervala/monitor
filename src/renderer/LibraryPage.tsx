@@ -8,6 +8,7 @@ import {
   groupUpdatedAt,
 } from '../shared/queue';
 import type { MonitorState, TaskGroup } from '../shared/types';
+import { RowProviders } from './ProviderIcon';
 
 export function ArchiveIcon() {
   return (
@@ -153,17 +154,13 @@ export function LibraryPage({
                     className={`archive-row${selected === group.id ? ' selected' : ''}`}
                   >
                     <button className="row-select" onClick={() => select(group.id)}>
+                      <RowProviders providers={sessions.map((session) => session.provider)} />
                       <span className="row-name">
                         {name}
                         <span className="row-meta">
                           {mode === 'library' &&
                             `${group.archived ? 'Archived' : queued ? 'In queue' : 'In library'} · `}
-                          {sessions.length} {sessions.length === 1 ? 'task' : 'tasks'} ·{' '}
-                          {[
-                            ...new Set(
-                              sessions.map((s) => (s.provider === 'codex' ? 'Codex' : 'Claude')),
-                            ),
-                          ].join(' + ')}
+                          {sessions.length} {sessions.length === 1 ? 'task' : 'tasks'}
                         </span>
                       </span>
                       <time

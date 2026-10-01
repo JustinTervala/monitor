@@ -349,6 +349,12 @@ h1 {
   flex-shrink: 0;
   object-fit: contain;
 }
+.row-providers {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
 .section-toggle {
   border: 0;
   background: transparent;
@@ -373,16 +379,15 @@ h1 {
 .open-row-action {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  gap: 6px;
   margin-right: 6px;
-  min-height: 30px;
-  padding: 5px 9px;
-  font-size: 11px;
+  width: 30px;
+  height: 30px;
+  padding: 5px;
   color: var(--accent);
   background: var(--button-tint);
   border-color: var(--button-tint-border);
-  white-space: nowrap;
 }
 .open-row-action:hover {
   color: var(--accent);

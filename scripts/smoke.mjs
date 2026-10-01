@@ -478,10 +478,7 @@ try {
     await reopened.getByRole('button', { name: 'Show in iTerm', exact: true }).count(),
     0,
   );
-  assert.equal(
-    (await cliRow.getByTestId('open-task').innerText()).replace(/\s+/g, ' '),
-    'Open Codex ↗',
-  );
+  assert.equal((await cliRow.getByTestId('open-task').innerText()).replace(/\s+/g, ' '), '');
   await reopened.screenshot({ path: '.runtime/cli-smoke.png' });
 
   // A large backlog is indexed without flooding the queue or mounting every row.
