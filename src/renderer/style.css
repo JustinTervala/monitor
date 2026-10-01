@@ -891,7 +891,6 @@ footer .quiet {
     gap: 8px;
     padding-right: 9px;
   }
-  .with-details .project-tag,
   .with-details .task-count {
     display: none;
   }
