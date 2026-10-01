@@ -38,7 +38,7 @@ For a group that is not snoozed, the highest section represented by any member d
 1. **Needs review:** a session has a new result or otherwise needs the user's attention.
 2. **Running:** at least one session is working and no session currently needs attention.
 3. **Read:** at least one member is acknowledged and no member is running or needs attention. Other members may still have unavailable status.
-   **Read** is collapsed by default and temporarily expands for search results.
+   **Read** is expanded by default. Its heading can collapse it; searching temporarily expands it.
 
 Example: a group containing a review task, a running task, and a read task appears only in Needs review. After the review item is acknowledged, the group moves to Running. The group's identity and saved priority are unchanged.
 

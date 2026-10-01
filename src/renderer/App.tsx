@@ -64,7 +64,7 @@ export function App() {
   const [drop, setDrop] = useState<{ id: string; placement: 'before' | 'after' } | null>(null);
   const [priorityView, setPriorityView] = useState(false);
   const [page, setPage] = useState<'queue' | 'library' | 'archive'>('queue');
-  const [readExpanded, setReadExpanded] = useState(false);
+  const [readExpanded, setReadExpanded] = useState(true);
   const [copied, setCopied] = useState<string | null>(null);
   const revision = useRef(0);
   useEffect(() => {

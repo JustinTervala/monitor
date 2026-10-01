@@ -120,14 +120,14 @@ try {
   assert.equal(await page.locator('select').count(), 0);
   assert.equal(
     await page.getByRole('button', { name: 'Read', exact: true }).getAttribute('aria-expanded'),
-    'false',
+    'true',
   );
   assert.equal(
     await page
       .getByTestId('group-row')
       .filter({ hasText: 'Investigate streaming playback' })
       .isVisible(),
-    false,
+    true,
   );
   assert.equal(await page.getByRole('button', { name: /Add tasks|Browse tasks/ }).count(), 0);
   // Queue shortcuts navigate directly without selecting a row or opening details.
@@ -305,7 +305,7 @@ try {
   assert.deepEqual(await page.locator('.queue-section h2').allTextContents(), [
     'Needs review',
     'Running',
-    '› Read',
+    '⌄ Read',
   ]);
   // Observe the navigation call without launching an invented Codex session.
   await app.evaluate(({ shell }) => {
@@ -323,7 +323,6 @@ try {
   await page.screenshot({ path: '.runtime/smoke.png' });
   await page.getByRole('button', { name: 'Archive workstream', exact: true }).click();
   await page.getByRole('button', { name: 'Archive A newly created task', exact: true }).click();
-  await page.getByRole('button', { name: 'Read', exact: true }).click();
   await page
     .getByRole('button', { name: 'Archive Investigate streaming playback', exact: true })
     .click();
@@ -584,7 +583,7 @@ try {
     .waitFor();
   assert.equal(
     await reopened.getByRole('button', { name: 'Read', exact: true }).getAttribute('aria-expanded'),
-    'false',
+    'true',
   );
   await reopened.getByRole('textbox', { name: 'Filter workstreams' }).fill('Historical task 259');
   await reopened.getByTestId('group-row').filter({ hasText: 'Historical task 259' }).waitFor();
@@ -689,7 +688,7 @@ try {
   assert.equal(await afterArchiveRestart.getByTestId('session-card').count(), 2);
   assert.deepEqual(errors, []);
   console.log(
-    'Electron smoke passed: typo-tolerant search across all pages, saved search order, Codex source archives hidden across views and restart, unarchive restores organization, Library backlog, pagination, promotion, collapsed Read, last-known placement, CLI desktop-first navigation, show/resume iTerm actions, one-click and keyboard navigation, group attention/recency selection, discovery, grouping, editing, snoozing, priority, Monitor archive, source immutability and persistence. Screenshots: .runtime/smoke.png, .runtime/archive-smoke.png and .runtime/cli-smoke.png',
+    'Electron smoke passed: typo-tolerant search across all pages, saved search order, Codex source archives hidden across views and restart, unarchive restores organization, Library backlog, pagination, promotion, expanded Read, last-known placement, CLI desktop-first navigation, show/resume iTerm actions, one-click and keyboard navigation, group attention/recency selection, discovery, grouping, editing, snoozing, priority, Monitor archive, source immutability and persistence. Screenshots: .runtime/smoke.png, .runtime/archive-smoke.png and .runtime/cli-smoke.png',
   );
 } finally {
   await app?.close();
