@@ -485,56 +485,6 @@ export function App() {
                 </>
               )}
             </div>
-            {selectedGroup.archived ? (
-              <div className="archive-control">
-                <button className="primary" onClick={() => void restore(selectedGroup, true)}>
-                  Restore to queue
-                </button>
-                <p>
-                  Archived in Monitor. Tasks stay in their source apps, and Monitor notifications
-                  are paused.
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="snooze-control">
-                  <label htmlFor="group-snooze">Defer this workstream</label>
-                  <select
-                    id="group-snooze"
-                    aria-label="Snooze workstream"
-                    value={isSnoozed(selectedGroup) ? 'current' : 'active'}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === 'active')
-                        void command({ type: 'unsnooze', groupId: selectedGroup.id });
-                      else if (value !== 'current')
-                        void command({
-                          type: 'snooze',
-                          groupId: selectedGroup.id,
-                          until:
-                            value === 'hour'
-                              ? Date.now() + 3600000
-                              : value === 'tomorrow'
-                                ? tomorrow()
-                                : null,
-                        });
-                    }}
-                  >
-                    <option value="active">Active</option>
-                    {isSnoozed(selectedGroup) && (
-                      <option value="current">{snoozeLabel(selectedGroup)}</option>
-                    )}
-                    <option value="hour">Snooze for 1 hour</option>
-                    <option value="tomorrow">Tomorrow at 9 AM</option>
-                    <option value="manual">Until I restore it</option>
-                  </select>
-                  <p>Tasks keep working. Monitor notifications pause for this group.</p>
-                </div>
-                <button className="archive-workstream" onClick={() => void archive(selectedGroup)}>
-                  <ArchiveIcon /> Archive workstream
-                </button>
-              </>
-            )}
             <div className="member-heading">
               <h3>Tasks</h3>
               <span>{selectedGroup.sessionIds.length}</span>
@@ -610,6 +560,56 @@ export function App() {
               Task states and read receipts come from the source app. An unavailable task may need
               to be opened there before it exposes live state.
             </p>
+            {selectedGroup.archived ? (
+              <div className="archive-control">
+                <button className="primary" onClick={() => void restore(selectedGroup, true)}>
+                  Restore to queue
+                </button>
+                <p>
+                  Archived in Monitor. Tasks stay in their source apps, and Monitor notifications
+                  are paused.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="snooze-control">
+                  <label htmlFor="group-snooze">Defer this workstream</label>
+                  <select
+                    id="group-snooze"
+                    aria-label="Snooze workstream"
+                    value={isSnoozed(selectedGroup) ? 'current' : 'active'}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === 'active')
+                        void command({ type: 'unsnooze', groupId: selectedGroup.id });
+                      else if (value !== 'current')
+                        void command({
+                          type: 'snooze',
+                          groupId: selectedGroup.id,
+                          until:
+                            value === 'hour'
+                              ? Date.now() + 3600000
+                              : value === 'tomorrow'
+                                ? tomorrow()
+                                : null,
+                        });
+                    }}
+                  >
+                    <option value="active">Active</option>
+                    {isSnoozed(selectedGroup) && (
+                      <option value="current">{snoozeLabel(selectedGroup)}</option>
+                    )}
+                    <option value="hour">Snooze for 1 hour</option>
+                    <option value="tomorrow">Tomorrow at 9 AM</option>
+                    <option value="manual">Until I restore it</option>
+                  </select>
+                  <p>Tasks keep working. Monitor notifications pause for this group.</p>
+                </div>
+                <button className="archive-workstream" onClick={() => void archive(selectedGroup)}>
+                  <ArchiveIcon /> Archive workstream
+                </button>
+              </>
+            )}
           </aside>
         )}
       </div>

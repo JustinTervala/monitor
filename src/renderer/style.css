@@ -562,7 +562,8 @@ h1 {
 .detail-actions button {
   font-size: 11px;
 }
-.snooze-control {
+.snooze-control,
+.archive-control {
   border-top: 1px solid #dde5d7;
   padding-top: 17px;
 }
