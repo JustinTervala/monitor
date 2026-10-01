@@ -589,9 +589,91 @@ try {
     true,
   );
   await reopened.screenshot({ path: '.runtime/library-narrow-smoke.png' });
+  // Source archive removes tasks from every view without losing Monitor organization.
+  const beforeSourceArchive = (await reopened.evaluate(() => window.monitor.snapshot())).state;
+  const archiveInCodex = (ids, archived) => {
+    const catalog = new DatabaseSync(join(home, 'state_5.sqlite'));
+    try {
+      const update = catalog.prepare('UPDATE threads SET archived=? WHERE id=?');
+      for (const id of ids) update.run(Number(archived), id);
+    } finally {
+      catalog.close();
+    }
+  };
+  archiveInCodex(['history-258'], true);
+  await reopened.evaluate(() => window.monitor.refresh());
+  await reopened.getByTestId('library-row').waitFor({ state: 'hidden' });
+  await reopened
+    .getByRole('complementary', { name: 'Workstream details' })
+    .waitFor({ state: 'hidden' });
+  archiveInCodex(['dddddd'], true);
+  await reopened.evaluate(() => window.monitor.refresh());
+  await reopened.getByRole('button', { name: /^Queue / }).click();
+  await reopened
+    .getByTestId('group-row')
+    .filter({ hasText: 'A newly created task' })
+    .waitFor({ state: 'hidden' });
+  archiveInCodex(['bbbbbb'], true);
+  await reopened.evaluate(() => window.monitor.refresh());
+  await reopened.getByRole('button', { name: /^Archived / }).click();
+  const billingArchive = reopened.getByTestId('archive-row').filter({ hasText: 'Billing rollout' });
+  await billingArchive.locator('.row-select').click();
+  await reopened.waitForFunction(
+    () => document.querySelectorAll('[data-testid="session-card"]').length === 1,
+  );
+  assert.ok(
+    (await reopened.getByTestId('session-card').innerText()).includes('Build the billing rollout'),
+  );
+  archiveInCodex(['aaaaaa'], true);
+  await reopened.evaluate(() => window.monitor.refresh());
+  await billingArchive.waitFor({ state: 'hidden' });
+  await reopened
+    .getByRole('complementary', { name: 'Workstream details' })
+    .waitFor({ state: 'hidden' });
+  const hiddenIds = ['aaaaaa', 'bbbbbb', 'dddddd', 'history-258'];
+  const hiddenState = (await reopened.evaluate(() => window.monitor.snapshot())).state;
+  for (const id of hiddenIds) {
+    assert.equal(hiddenState.sessions[`codex:${id}`], undefined);
+    assert.ok(!hiddenState.groups.some((g) => g.sessionIds.includes(`codex:${id}`)));
+  }
+  for (const destination of [/^Library /, /^Archived /]) {
+    await reopened.getByRole('button', { name: destination }).click();
+    for (const query of [
+      'Billing rollout',
+      'Review the billing changes',
+      'A newly created task',
+      'Historical task 258',
+    ]) {
+      await reopened.getByRole('textbox', { name: 'Filter workstreams' }).fill(query);
+      await reopened.getByRole('heading', { name: 'No matching workstreams' }).waitFor();
+    }
+  }
+  await reopened.getByRole('textbox', { name: 'Filter workstreams' }).fill('');
+  // Also archive a cached task while Monitor is closed: the first source read must catch it.
+  await app.close();
+  app = undefined;
+  archiveInCodex(['cccccc'], true);
+  app = await electron.launch({ args: ['.'], env });
+  const afterArchiveRestart = await app.firstWindow();
+  await afterArchiveRestart.getByRole('heading', { name: 'Your queue.' }).waitFor();
+  const restartState = (await afterArchiveRestart.evaluate(() => window.monitor.snapshot())).state;
+  assert.equal(restartState.sessions['codex:cccccc'], undefined);
+  assert.ok(!restartState.groups.some((g) => g.archived));
+  archiveInCodex([...hiddenIds, 'cccccc'], false);
+  await afterArchiveRestart.evaluate(() => window.monitor.refresh());
+  const unarchivedState = (await afterArchiveRestart.evaluate(() => window.monitor.snapshot()))
+    .state;
+  assert.deepEqual(unarchivedState.groups, beforeSourceArchive.groups);
+  await afterArchiveRestart.getByRole('button', { name: /^Archived / }).click();
+  await afterArchiveRestart
+    .getByTestId('archive-row')
+    .filter({ hasText: 'Billing rollout' })
+    .locator('.row-select')
+    .click();
+  assert.equal(await afterArchiveRestart.getByTestId('session-card').count(), 2);
   assert.deepEqual(errors, []);
   console.log(
-    'Electron smoke passed: Library backlog, pagination, promotion, collapsed Read, last-known placement, CLI desktop-first navigation, show/resume iTerm actions, one-click and keyboard navigation, group attention/recency selection, discovery, grouping, editing, snoozing, priority, archive, source immutability and persistence. Screenshots: .runtime/smoke.png, .runtime/archive-smoke.png and .runtime/cli-smoke.png',
+    'Electron smoke passed: Codex source archives hidden across views and restart, unarchive restores organization, Library backlog, pagination, promotion, collapsed Read, last-known placement, CLI desktop-first navigation, show/resume iTerm actions, one-click and keyboard navigation, group attention/recency selection, discovery, grouping, editing, snoozing, priority, Monitor archive, source immutability and persistence. Screenshots: .runtime/smoke.png, .runtime/archive-smoke.png and .runtime/cli-smoke.png',
   );
 } finally {
   await app?.close();

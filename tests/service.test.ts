@@ -8,7 +8,13 @@ import { MonitorStore } from '../src/main/store';
 import type { ObserverCallbacks, SessionProvider } from '../src/providers/provider';
 import { session } from './helpers';
 import type { Session } from '../src/shared/types';
-import { emptyState, groupSection, newGroup } from '../src/shared/queue';
+import {
+  emptyState,
+  groupProject,
+  groupSection,
+  groupUpdatedAt,
+  newGroup,
+} from '../src/shared/queue';
 
 class FakeProvider implements SessionProvider {
   constructor(readonly id: SessionProvider['id'] = 'codex') {}
@@ -327,6 +333,146 @@ test('archive persists, keeps observing without rediscovery or notifications, an
   provider.emit(session('aaaaaa'));
   provider.emit({ ...finished, attentionKey: 'result:after-restore' });
   assert.equal(notices.length, 1);
+});
+
+test('Codex archives hide every placement, persist quietly, and restore saved organization', async (t) => {
+  const path = mkdtempSync(join(tmpdir(), 'monitor-source-archive-'));
+  const database = join(path, 'state.sqlite');
+  const store = new MonitorStore(database);
+  const state = emptyState();
+  const tasks = ['queued', 'library', 'archived', 'snoozed'].map((id) =>
+    session(id, { status: 'read', attentionKey: 'result:old' }),
+  );
+  state.sessions = Object.fromEntries(tasks.map((task) => [task.id, task]));
+  state.groups = tasks.map((task) => ({
+    ...newGroup(task.id),
+    name: `Saved ${task.externalId}`,
+    projectOverride: 'Custom project',
+    inQueue: task.externalId !== 'library',
+    archived: task.externalId === 'archived',
+    snooze: task.externalId === 'snoozed' ? { until: null } : null,
+  }));
+  store.write(state);
+  const notices: NotificationEvent[] = [];
+  let provider = new FakeProvider();
+  let service = new MonitorService(store, [provider], (n) => notices.push(n));
+  t.after(() => {
+    service.stop();
+    rmSync(path, { recursive: true });
+  });
+  await service.start();
+  provider.emit(...tasks);
+  assert.deepEqual(service.snapshot().state.groups, state.groups);
+  provider.emit(
+    ...tasks.map((task) => ({
+      ...task,
+      archived: true,
+      status: 'running' as const,
+      activityAt: Date.now(),
+    })),
+  );
+  const finished = tasks.map((task) => ({
+    ...task,
+    archived: true,
+    attentionKey: 'result:hidden',
+  }));
+  provider.emit(...finished);
+  assert.deepEqual(service.snapshot().state.groups, []);
+  assert.deepEqual(service.snapshot().state.sessions, {});
+  assert.equal(notices.length, 0);
+  assert.deepEqual(
+    provider.tracked,
+    tasks.map((task) => task.externalId),
+  );
+
+  service.stop();
+  const reopened = new MonitorStore(database);
+  assert.deepEqual(
+    reopened.read().groups,
+    state.groups,
+    'hidden activity preserves all scheduling metadata',
+  );
+  provider = new FakeProvider();
+  service = new MonitorService(reopened, [provider], (n) => notices.push(n));
+  assert.deepEqual(
+    service.snapshot().state.groups,
+    [],
+    'cached archives stay hidden before reconnect',
+  );
+  await service.start();
+  provider.emit(...finished);
+  provider.emit(...finished.map((task) => ({ ...task, archived: false })));
+  assert.deepEqual(service.snapshot().state.groups, state.groups);
+  assert.equal(notices.length, 0, 'unarchiving does not replay suppressed results');
+});
+
+test('a source-archived Codex member leaves the rest of a mixed group visible', async (t) => {
+  const path = mkdtempSync(join(tmpdir(), 'monitor-mixed-archive-'));
+  const provider = new FakeProvider();
+  const store = new MonitorStore(join(path, 'state.sqlite'));
+  const service = new MonitorService(store, [provider], () =>
+    assert.fail('Archive must not notify'),
+  );
+  t.after(() => {
+    service.stop();
+    rmSync(path, { recursive: true });
+  });
+  await service.start();
+  const codex = session('codex-task', {
+    status: 'review',
+    awaitingInput: true,
+    attentionKey: 'result:old',
+    directory: '/work/hidden',
+    updatedAt: 20,
+  });
+  const claude = session('claude-task', {
+    id: 'claude:claude-task',
+    provider: 'claude',
+    directory: '/work/visible',
+    updatedAt: 10,
+  });
+  provider.emit(codex, claude);
+  const [a, b] = service.snapshot().state.groups;
+  service.command({ type: 'merge', sourceId: b.id, targetId: a.id, name: 'Mixed workstream' });
+  const saved = service.snapshot().state.groups[0];
+  provider.emit({ ...codex, archived: true });
+  const visible = service.snapshot().state;
+  assert.deepEqual(visible.groups, [{ ...saved, sessionIds: [claude.id] }]);
+  assert.deepEqual(Object.keys(visible.sessions), [claude.id]);
+  assert.equal(groupSection(visible, visible.groups[0]), 'running');
+  assert.equal(groupProject(visible, visible.groups[0]).name, 'visible');
+  assert.equal(groupUpdatedAt(visible, visible.groups[0]), 10);
+  // A normal edit must operate on the full saved group, not erase its hidden member.
+  service.command({ type: 'rename', groupId: saved.id, name: 'Renamed', projectOverride: null });
+  service.command({ type: 'archive', groupId: saved.id });
+  assert.deepEqual(store.read().groups[0].sessionIds, saved.sessionIds);
+  assert.deepEqual(service.snapshot().state.groups[0].sessionIds, [claude.id]);
+  provider.emit(codex);
+  assert.deepEqual(service.snapshot().state.groups, [
+    { ...saved, name: 'Renamed', archived: true },
+  ]);
+});
+
+test('saved tasks are checked for Codex archives during the first catalog read', async (t) => {
+  const path = mkdtempSync(join(tmpdir(), 'monitor-offline-archive-'));
+  const store = new MonitorStore(join(path, 'state.sqlite'));
+  const task = session('cached-task');
+  store.write({ ...emptyState(), sessions: { [task.id]: task }, groups: [newGroup(task.id)] });
+  const provider = new FakeProvider();
+  provider.start = async (callbacks) => {
+    assert.deepEqual(provider.tracked, [task.externalId]);
+    callbacks.sessions([{ ...task, archived: true }]);
+  };
+  const service = new MonitorService(store, [provider], () =>
+    assert.fail('Archive must not notify'),
+  );
+  t.after(() => {
+    service.stop();
+    rmSync(path, { recursive: true });
+  });
+  await service.start();
+  assert.deepEqual(service.snapshot().state.groups, []);
+  assert.deepEqual(service.snapshot().state.sessions, {});
 });
 
 test('a Claude result in a snoozed or archived mixed-provider group updates quietly', async (t) => {

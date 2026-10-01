@@ -37,8 +37,12 @@ export const displayStatus = (state: MonitorState, session: Session): SessionSta
     : session.status;
 export const isSnoozed = (group: TaskGroup, now = Date.now()) =>
   group.snooze !== null && (group.snooze.until === null || group.snooze.until > now);
+export const isHiddenSession = (session: Session) =>
+  session.provider === 'codex' && session.archived;
 export const groupSessions = (state: MonitorState, group: TaskGroup) =>
-  group.sessionIds.map((id) => state.sessions[id]).filter((s): s is Session => Boolean(s));
+  group.sessionIds
+    .map((id) => state.sessions[id])
+    .filter((s): s is Session => Boolean(s) && !isHiddenSession(s));
 export const groupName = (state: MonitorState, group: TaskGroup) =>
   group.name || groupSessions(state, group)[0]?.title || 'Untitled task';
 export function groupSection(

@@ -25,6 +25,7 @@ export interface Session {
   /** Actual turn activity, not a title edit, focus, or catalog refresh. */
   activityAt?: number;
   awaitingInput?: boolean;
+  /** Source-owned flag. Codex-archived tasks are hidden throughout Monitor. */
   archived: boolean;
   /** false when the source app has no exact-session route (e.g. a terminal session). */
   openable?: boolean;
@@ -47,7 +48,7 @@ export interface TaskGroup {
   archived: boolean;
   /** null = active; {until:null} = snoozed until explicitly restored. */
   snooze: { until: number | null } | null;
-  /** Automatic admission to the attention queue; Library always contains the group. */
+  /** Automatic queue admission; Library contains the group while any member is visible. */
   inQueue: boolean;
 }
 

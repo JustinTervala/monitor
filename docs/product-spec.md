@@ -97,7 +97,7 @@ The concept supports one hour, tomorrow morning, or until explicitly unsnoozed. 
 - Archiving clears any snooze. Restoring returns the group to its saved priority and current state, without replaying old notifications. Queue priority controls skip archived entries.
 - Names, projects, task links, and detaching remain available in the archive. A detached member stays archived. Restore before merging, reordering, or snoozing.
 
-Monitor's archive is independent of the source catalog's archive filter. Previously untracked source-archived tasks are not imported by this page. A previously admitted task remains in its existing Monitor workstream if later archived in the source app.
+Monitor's archive is independent of the source archive flag. Previously untracked source-archived tasks are not imported. A task archived in Codex disappears from every Monitor view, search, count, and notification. Mixed groups retain only their visible members; groups without visible members disappear. Saved membership, names, priority, snoozes, and Monitor archive placement remain intact so unarchiving in Codex restores the task to its existing workstream. Hidden tasks do not affect group status, project, recency, or queue admission. Claude's existing source-archive behavior is unchanged.
 
 ## Notifications and navigation
 

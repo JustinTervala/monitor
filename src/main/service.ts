@@ -3,8 +3,10 @@ import { homedir } from 'node:os';
 import {
   applyCommand,
   groupName,
+  groupSessions,
   initiallyQueued,
   isCurrentlyActive,
+  isHiddenSession,
   isQueued,
   isSnoozed,
   newGroup,
@@ -47,13 +49,27 @@ export class MonitorService extends EventEmitter {
     }
   }
   snapshot(): Snapshot {
+    // Hide source-archived Codex tasks everywhere without losing saved membership
+    // or priority. Unarchiving in Codex makes them visible in their original group.
+    const state = structuredClone(this.state);
+    for (const [id, session] of Object.entries(state.sessions))
+      if (isHiddenSession(session)) delete state.sessions[id];
+    state.groups = state.groups
+      .map((group) => ({
+        ...group,
+        sessionIds: groupSessions(state, group).map((session) => session.id),
+      }))
+      .filter((group) => group.sessionIds.length > 0);
     return {
       homeDirectory: homedir(),
-      state: structuredClone(this.state),
+      state,
       health: [...this.health.values()],
     };
   }
   async start() {
+    // Include saved members in the first catalog read, even if archived while
+    // Monitor was closed.
+    this.updateTracking();
     for (const provider of this.providers) {
       await provider.start({
         sessions: (sessions) => this.ingest(sessions),
@@ -95,6 +111,7 @@ export class MonitorService extends EventEmitter {
       const activityAt = session.activityAt || 0;
       if (
         group &&
+        !isHiddenSession(session) &&
         !group.archived &&
         !group.inQueue &&
         (isCurrentlyActive(session) ||
@@ -128,6 +145,7 @@ export class MonitorService extends EventEmitter {
       this.state.notificationKeys[session.id] = key;
       if (
         !firstObservation &&
+        !isHiddenSession(session) &&
         session.evidence === 'live' &&
         this.state.notifications &&
         group &&
