@@ -14,6 +14,7 @@ import {
 import type { Command, MonitorState, Session, Snapshot, TaskGroup } from '../shared/types';
 import { ArchiveIcon, LibraryPage } from './LibraryPage';
 import { ProviderIcon, RowProviders } from './ProviderIcon';
+import { displayDirectory } from './directory';
 import { canResumeInTerminal, resumeCommand } from '../shared/resume';
 
 type Editor =
@@ -145,7 +146,7 @@ export function App() {
         <p>{error || 'Connecting to your workstreams…'}</p>
       </main>
     );
-  const { state, health } = snapshot;
+  const { state, health, homeDirectory } = snapshot;
   const activeGroups = state.groups.filter(isQueued);
   const archivedCount = state.groups.filter((g) => g.archived).length;
   const selectedGroup = state.groups.find((g) => g.id === selected);
@@ -154,7 +155,7 @@ export function App() {
   const tracked = new Set(state.groups.flatMap((g) => g.sessionIds));
   const matches = (g: TaskGroup) =>
     `${groupName(state, g)} ${projectTag(state, g)} ${groupSessions(state, g)
-      .map((s) => `${s.title} ${s.directory || ''}`)
+      .map((s) => `${s.title} ${s.directory || ''} ${displayDirectory(s.directory, homeDirectory)}`)
       .join(' ')}`
       .toLowerCase()
       .includes(search.toLowerCase());
@@ -418,6 +419,7 @@ export function App() {
       <div className={`workspace ${selectedGroup ? 'with-details' : ''}`}>
         {page !== 'queue' ? (
           <LibraryPage
+            homeDirectory={homeDirectory}
             key={page}
             mode={page}
             openAction={openAction}
@@ -592,7 +594,8 @@ export function App() {
                 )}
                 <p>{session.detail}</p>
                 <code title={session.directory || ''}>
-                  {session.directory || 'Source directory unavailable'}
+                  {displayDirectory(session.directory, homeDirectory) ||
+                    'Source directory unavailable'}
                 </code>
                 <div className="session-actions">
                   {primary(session) && (

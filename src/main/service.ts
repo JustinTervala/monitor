@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { homedir } from 'node:os';
 import {
   applyCommand,
   groupName,
@@ -46,7 +47,11 @@ export class MonitorService extends EventEmitter {
     }
   }
   snapshot(): Snapshot {
-    return { state: structuredClone(this.state), health: [...this.health.values()] };
+    return {
+      homeDirectory: homedir(),
+      state: structuredClone(this.state),
+      health: [...this.health.values()],
+    };
   }
   async start() {
     for (const provider of this.providers) {

@@ -76,6 +76,7 @@ export interface ProviderHealth {
 }
 
 export interface Snapshot {
+  homeDirectory: string;
   state: MonitorState;
   health: ProviderHealth[];
 }

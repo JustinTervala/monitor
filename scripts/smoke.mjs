@@ -1,6 +1,7 @@
 import { _electron as electron } from 'playwright';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { homedir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { createServer } from 'node:net';
 import assert from 'node:assert/strict';
@@ -483,11 +484,12 @@ try {
 
   // A large backlog is indexed without flooding the queue or mounting every row.
   const oldCatalog = new DatabaseSync(join(home, 'state_5.sqlite'));
-  const addOld = oldCatalog.prepare("INSERT INTO threads VALUES(?,?,'/work/history','cli',0,?)");
+  const addOld = oldCatalog.prepare("INSERT INTO threads VALUES(?,?,?,'cli',0,?)");
   for (let i = 0; i < 260; i++)
     addOld.run(
       `history-${String(i).padStart(3, '0')}`,
       `Historical task ${i}`,
+      join(homedir(), 'work/history'),
       now - 30 * 86400 - i,
     );
   oldCatalog.close();

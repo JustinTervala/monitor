@@ -9,6 +9,7 @@ import {
 } from '../shared/queue';
 import type { MonitorState, TaskGroup } from '../shared/types';
 import { RowProviders } from './ProviderIcon';
+import { displayDirectory } from './directory';
 
 export function ArchiveIcon() {
   return (
@@ -43,6 +44,7 @@ function activityDate(time: number) {
 }
 
 export function LibraryPage({
+  homeDirectory,
   mode,
   openAction,
   state,
@@ -52,6 +54,7 @@ export function LibraryPage({
   select,
   restore,
 }: {
+  homeDirectory: string;
   mode: 'library' | 'archive';
   openAction: (group: TaskGroup) => ReactNode;
   state: MonitorState;
@@ -128,8 +131,9 @@ export function LibraryPage({
                 </svg>
                 <span className="project-heading-name">
                   {project.name}
-                  <small>
-                    {project.directory || (project.key.startsWith('name:') ? 'Custom project' : '')}
+                  <small title={project.directory || undefined}>
+                    {displayDirectory(project.directory, homeDirectory) ||
+                      (project.key.startsWith('name:') ? 'Custom project' : '')}
                   </small>
                 </span>
                 <span className="project-total">{project.groups.length}</span>
