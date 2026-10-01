@@ -16,7 +16,7 @@ All non-archived source tasks are discovered automatically into **Library**, inc
 
 On upgrading an existing installation, old unnamed singletons move to Library. Names, membership, projects, relative order, snoozes, archives, and notification receipts are preserved. Named/grouped workstreams, custom projects, and snoozes retain queue membership.
 
-Every admitted task belongs to one workstream, in the Library, optionally admitted to the queue or explicitly archived. A standalone task appears as a single-task entry. Dragging one task onto another starts group creation and asks for a manually created name. A named group can contain sessions from both harnesses.
+Every admitted task belongs to one workstream, in the Library, optionally admitted to the queue or explicitly archived. A standalone task appears as a single-task entry. Dropping onto an existing named group immediately adds the source tasks while retaining the destination's name, identity, project override, and snooze policy. Dropping onto an unnamed task opens the group naming dialog. A named group can contain sessions from both harnesses.
 
 Each group appears exactly once in the queue, as a single row. Selecting the row reveals its individual sessions and their observed states in a detail view. Group membership never causes tasks to be duplicated across queue sections.
 

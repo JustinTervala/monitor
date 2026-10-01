@@ -216,6 +216,15 @@ export function App() {
           targetId: target.id,
           placement: drop?.placement || 'before',
         });
+      else if (target.name)
+        void command({
+          type: 'merge',
+          sourceId: source.id,
+          targetId: target.id,
+          name: target.name,
+        }).then((merged) => {
+          if (merged) setSelected(target.id);
+        });
       else setEditor({ kind: 'merge', source, target });
     }
     setDrag(null);

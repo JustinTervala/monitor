@@ -170,11 +170,10 @@ try {
   await page.mouse.move(targetBox.x + 120, targetBox.y + 25, { steps: 12 });
   await page.mouse.move(targetBox.x + 135, targetBox.y + 25, { steps: 3 });
   await page.mouse.up();
-  await page.getByRole('textbox', { name: 'Group name' }).fill('Billing rollout');
-  await page.getByRole('button', { name: 'Create group', exact: true }).click();
   await page.waitForFunction(
     () => document.querySelectorAll('[data-testid="group-row"]').length === 2,
   );
+  assert.equal(await page.getByRole('dialog').count(), 0);
   assert.equal(await page.getByTestId('session-card').count(), 2);
   await page.getByRole('button', { name: 'Close details', exact: true }).click();
   await target.getByTestId('open-task').click();
