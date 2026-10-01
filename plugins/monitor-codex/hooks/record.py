@@ -17,6 +17,36 @@ EVENTS = {
 ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{5,127}\Z")
 
 
+def terminal_owner():
+    """Find the calling Codex CLI, never reading process arguments or transcripts."""
+    try:
+        output = subprocess.run(
+            ["/bin/ps", "-A", "-o", "pid=,ppid=,tty=,lstart=,comm="],
+            capture_output=True, text=True, timeout=0.5, check=True,
+        ).stdout
+        processes = {}
+        for line in output.splitlines():
+            parts = line.split(None, 8)
+            if len(parts) == 9 and parts[0].isdigit() and parts[1].isdigit():
+                processes[int(parts[0])] = parts
+        pid = os.getppid()
+        for _ in range(12):
+            parts = processes.get(pid)
+            if not parts:
+                return None
+            if re.fullmatch(r"codex(?:-[a-z0-9_-]+)?", Path(parts[8]).name, re.I):
+                # Desktop/app-server has no controlling terminal. Do not keep walking
+                # past it into unrelated shells (or trust inherited terminal env vars).
+                if not re.fullmatch(r"ttys\d{1,4}", parts[2]):
+                    return None
+                return {"pid": pid, "tty": "/dev/" + parts[2],
+                        "startedAt": " ".join(parts[3:8])}
+            pid = int(parts[1])
+    except (OSError, subprocess.SubprocessError, ValueError):
+        pass
+    return None
+
+
 def record(payload, notification=False):
     if not isinstance(payload, dict) or payload.get("agent_id"):
         return
@@ -33,6 +63,7 @@ def record(payload, notification=False):
         return
     if event not in {"SessionStart", "SessionEnd"} and not turn:
         return
+    owner = terminal_owner()
     root = Path(os.environ.get("MONITOR_CODEX_HOOKS_DIR", str(
         Path.home() / "Library/Application Support/Monitor/codex-hooks")))
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -63,9 +94,15 @@ def record(payload, notification=False):
                     old = raw.get(key)
                     if isinstance(old, dict):
                         state[key] = {k: old[k] for k in ("event", "turnId", "at") if k in old}
+                old = raw.get("terminal")
+                if isinstance(old, dict):
+                    state["terminal"] = {k: old[k] for k in
+                        ("pid", "tty", "startedAt", "at", "ended") if k in old}
         except (OSError, ValueError, AttributeError):
             pass
         observation = {"event": event, "turnId": turn, "at": time.time_ns() / 1_000_000}
+        if owner:
+            state["terminal"] = {**owner, "at": observation["at"], "ended": event == "SessionEnd"}
         if notification:
             # A late notification from an older turn cannot replace the current turn.
             activity = state.get("activity", {})

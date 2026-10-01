@@ -2,6 +2,12 @@ export type ProviderId = 'codex' | 'claude';
 export type SessionStatus = 'review' | 'running' | 'read' | 'unknown';
 export type QueueSection = SessionStatus | 'snoozed';
 
+export interface TerminalIdentity {
+  pid: number;
+  tty: string;
+  startedAt: string;
+}
+
 /** Provider-owned observation. Never store transcript content here. */
 export interface Session {
   id: string;
@@ -19,10 +25,14 @@ export interface Session {
   archived: boolean;
   /** false when the source app has no exact-session route (e.g. a terminal session). */
   openable?: boolean;
-  /** Claude Code session id for `claude --resume`; never a command string. */
+  /** Native CLI session id; never a command string. */
   resumeId?: string | null;
-  /** Live Claude CLI process in a terminal, for Show in iTerm. */
+  /** Live agent process in a terminal, for Show in iTerm. */
   terminalPid?: number | null;
+  /** Codex process identity, checked again before focusing iTerm. */
+  terminalIdentity?: TerminalIdentity | null;
+  /** Codex CLI has exited and no active desktop turn is observed. */
+  terminalResumeAllowed?: boolean;
 }
 
 export interface TaskGroup {

@@ -12,7 +12,11 @@ After installation, restart Codex and review/trust the hook definitions in Codex
 
 ## Evidence and state
 
-Records live in `~/Library/Application Support/Monitor/codex-hooks`, overridable by `MONITOR_CODEX_HOOKS_DIR` in both the source process and Monitor. Only task ID, turn ID, event name, and time are persisted. A bounded per-task lock and atomic replacement handle concurrent callbacks. Files are private to the OS user. The reader rejects symlinks, unsafe permissions, oversized/malformed records, and invalid identities/times. Records from subagents or sessions absent from the main catalog cannot create queue entries.
+Records live in `~/Library/Application Support/Monitor/codex-hooks`, overridable by `MONITOR_CODEX_HOOKS_DIR` in both the source process and Monitor. Only task ID, turn ID, event name, time, and optional terminal ownership metadata (process ID, start time, controlling TTY, observation time and end flag) are persisted. A bounded per-task lock and atomic replacement handle concurrent callbacks. Files are private to the OS user. The reader rejects symlinks, unsafe permissions, oversized/malformed records, and invalid identities/times. Records from subagents or sessions absent from the main catalog cannot create queue entries.
+
+For terminal ownership, the writer walks its process ancestors using `ps` executable names, never process arguments or environment contents. The first Codex ancestor must have a controlling terminal. Monitor checks its PID, start time, terminal and executable again; if `/new` reuses that process, only the newest task binding can focus it. A failed process lookup does not enable Resume. Process liveness is navigation evidence, not proof that the model is working; the activity freshness limit still applies.
+
+Every Codex task keeps its desktop link. Show in iTerm and Resume in iTerm are secondary actions in details. Resume uses the exact session UUID and shell-quotes its project directory, after refreshing observations and checking that neither its CLI nor a desktop turn is active. It does not terminate a CLI turn or convert history. Desktop and CLI observations update the same Monitor task and preserve its group, priority and archive state.
 
 Current desktop runtime state and read receipts take precedence. A receipt for an older turn cannot acknowledge a newer turn observed by the companion. When current desktop state is unavailable:
 
@@ -29,7 +33,7 @@ The [desktop observer](codex-integration.md) remains because hooks do not expose
 
 ## Verification boundaries
 
-Tests execute the actual Python hook/notification writer with synthetic payloads and temporary files. They cover privacy, provisional stops, continued turns, late callbacks, interruptions, expiring activity, malformed records, and forwarding an existing notifier. Adapter tests verify desktop precedence and hook observation without IPC. Service tests verify quiet history and deduplication across sources. Installer tests use a fake CLI and isolated home to check repeatability, unrelated TOML preservation, and restoring a previous callback.
+Tests execute the actual Python hook/notification writer with synthetic payloads and temporary files. They cover privacy, provisional stops, continued turns, late callbacks, interruptions, expiring activity, malformed records, and forwarding an existing notifier. Adapter tests verify desktop precedence, observation without IPC, terminal ownership, exited/reused PIDs and `/new`. Service tests verify quiet history, deduplication across sources and resume revalidation. The Electron smoke test exercises desktop-first CLI navigation plus Show/Resume in iTerm through production IPC, with OS process/AppleScript calls stubbed. Installer tests use a fake CLI and isolated home to check repeatability, unrelated TOML preservation, and restoring a previous callback.
 
 These tests do not prove event delivery by a particular Codex installation before its hooks are trusted and a new task is run. A CLI plugin installation and manifest validation also do not prove live hook delivery or native notification display under macOS Focus settings.
 

@@ -412,7 +412,7 @@ test('resume commands quote directories and reject anything but a session uuid',
   assert.equal(resumeCommand({ ...base, directory: '/w', resumeId: '$(touch x)' }), null);
   assert.equal(
     resumeCommand({ ...base, provider: 'codex', directory: '/w', resumeId: uuid(1) }),
-    null,
+    `cd '/w' && codex resume ${uuid(1)}`,
   );
 });
 

@@ -3,7 +3,7 @@ import { applyCommand, groupName, isSnoozed, newGroup } from '../shared/queue';
 import type { Command, MonitorState, ProviderHealth, Session, Snapshot } from '../shared/types';
 import type { SessionProvider } from '../providers/provider';
 import { MonitorStore } from './store';
-import { resumeCommand } from '../shared/resume';
+import { canResumeInTerminal, resumeCommand } from '../shared/resume';
 
 export interface NotificationEvent {
   title: string;
@@ -140,11 +140,27 @@ export class MonitorService extends EventEmitter {
   terminalPid(id: string): number | null {
     return this.state.sessions[id]?.terminalPid ?? null;
   }
+  terminalTarget(id: string) {
+    const session = this.state.sessions[id];
+    if (!session?.terminalPid) throw new Error('This session is not running in a terminal.');
+    return {
+      pid: session.terminalPid,
+      provider: session.provider,
+      identity: session.terminalIdentity,
+    };
+  }
   resumeCommand(id: string): string {
     const session = this.state.sessions[id];
     const command = session && resumeCommand(session);
     if (!command) throw new Error('This session cannot be resumed from a terminal.');
     return command;
+  }
+  async terminalResumeCommand(id: string): Promise<string> {
+    await this.refresh();
+    const session = this.state.sessions[id];
+    if (!session || !canResumeInTerminal(session))
+      throw new Error('This task may still be active. Open it in its app or terminal instead.');
+    return this.resumeCommand(id);
   }
   async refresh() {
     await Promise.all(this.providers.map((provider) => provider.refresh()));

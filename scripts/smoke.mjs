@@ -1,5 +1,5 @@
 import { _electron as electron } from 'playwright';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createServer } from 'node:net';
@@ -196,6 +196,10 @@ try {
   );
   await target.locator('.row-select').click();
   await page.getByLabel('Snooze workstream').selectOption('manual');
+  await page
+    .getByRole('region', { name: 'Snoozed', exact: true })
+    .getByTestId('group-row')
+    .waitFor();
   assert.equal(
     await page
       .getByRole('region', { name: 'Snoozed', exact: true })
@@ -204,6 +208,10 @@ try {
     1,
   );
   await page.getByLabel('Snooze workstream').selectOption('active');
+  await page
+    .getByRole('region', { name: 'Needs review', exact: true })
+    .getByTestId('group-row')
+    .waitFor();
   assert.equal(
     await page
       .getByRole('region', { name: 'Needs review', exact: true })
@@ -337,8 +345,93 @@ try {
   assert.equal(await reopened.getByTestId('archive-row').count(), 2);
   await reopened.getByRole('button', { name: /^Queue / }).click();
   await reopened.getByTestId('group-row').filter({ hasText: 'A newly created task' }).waitFor();
+  // Exercise production CLI observation and IPC actions. Stub only the OS boundary;
+  // never focus or resume a real personal session during a fixture test.
+  const cliId = '00000000-0000-4000-8000-000000000001';
+  const waitForCliAction = (expected) =>
+    app.evaluate(async (_, target) => {
+      for (let i = 0; i < 250; i++) {
+        if (JSON.stringify(globalThis.cliActions.at(-1)) === JSON.stringify(target)) return;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      throw new Error(
+        `Missing CLI action: ${JSON.stringify(target)}; observed ${JSON.stringify(globalThis.cliActions)}`,
+      );
+    }, expected);
+  await app.evaluate(({ shell }) => {
+    globalThis.cliAlive = true;
+    globalThis.cliActions = [];
+    shell.openExternal = async (url) => {
+      globalThis.cliActions.push(['desktop', url]);
+    };
+    const cp = process.getBuiltinModule('child_process');
+    const original = cp.execFile;
+    cp.execFile = (file, args, options, callback) => {
+      if (file === '/bin/ps' && args.at(-1) === '4242') {
+        if (globalThis.cliAlive)
+          callback(null, '4242 ttys004 Thu Oct 1 04:52:11 2026 /opt/bin/codex', '');
+        else callback(Object.assign(new Error('No process'), { code: 1 }), '', '');
+      } else if (file === '/usr/bin/osascript') {
+        globalThis.cliActions.push(['terminal', args[2]]);
+        callback(null, args[2].startsWith('/dev/') ? 'shown' : 'resumed', '');
+      } else return original(file, args, options, callback);
+    };
+  });
+  mkdirSync(env.MONITOR_CODEX_HOOKS_DIR, { mode: 0o700 });
+  const cliRecord = {
+    version: 1,
+    sessionId: cliId,
+    terminal: {
+      pid: 4242,
+      tty: '/dev/ttys004',
+      startedAt: 'Thu Oct 1 04:52:11 2026',
+      at: Date.now(),
+      ended: false,
+    },
+    activity: { event: 'UserPromptSubmit', turnId: 'cli-turn-123456', at: Date.now() },
+  };
+  const hookPath = join(env.MONITOR_CODEX_HOOKS_DIR, `${cliId}.json`);
+  writeFileSync(hookPath, JSON.stringify(cliRecord), { mode: 0o600 });
+  const cliDb = new DatabaseSync(join(home, 'state_5.sqlite'));
+  cliDb.prepare("INSERT INTO threads VALUES(?,'CLI task','/work/cli','cli',0,?)").run(cliId, now);
+  cliDb.close();
+  await reopened.evaluate(() => window.monitor.refresh());
+  const cliRow = reopened.getByTestId('group-row').filter({ hasText: 'CLI task' });
+  await cliRow.getByTestId('open-task').click();
+  assert.deepEqual(await app.evaluate(() => globalThis.cliActions), [
+    ['desktop', `codex://threads/${cliId}`],
+  ]);
+  await cliRow.locator('.row-select').click();
+  await reopened.getByRole('button', { name: 'Show in iTerm', exact: true }).click();
+  await waitForCliAction(['terminal', '/dev/ttys004']);
+  assert.deepEqual((await app.evaluate(() => globalThis.cliActions)).at(-1), [
+    'terminal',
+    '/dev/ttys004',
+  ]);
+  cliRecord.activity = { ...cliRecord.activity, event: 'Stop', at: Date.now() };
+  cliRecord.completion = { ...cliRecord.activity, event: 'TurnComplete' };
+  writeFileSync(hookPath, JSON.stringify(cliRecord));
+  await app.evaluate(() => {
+    globalThis.cliAlive = false;
+  });
+  await reopened.evaluate(() => window.monitor.refresh());
+  await reopened.getByRole('button', { name: 'Resume in iTerm', exact: true }).click();
+  await waitForCliAction(['terminal', `cd '/work/cli' && codex resume ${cliId}`]);
+  assert.deepEqual((await app.evaluate(() => globalThis.cliActions)).at(-1), [
+    'terminal',
+    `cd '/work/cli' && codex resume ${cliId}`,
+  ]);
+  assert.equal(
+    await reopened.getByRole('button', { name: 'Show in iTerm', exact: true }).count(),
+    0,
+  );
+  assert.equal(
+    (await cliRow.getByTestId('open-task').innerText()).replace(/\s+/g, ' '),
+    'Open Codex ↗',
+  );
+  await reopened.screenshot({ path: '.runtime/cli-smoke.png' });
   console.log(
-    'Electron smoke passed: one-click and keyboard task navigation, group attention/recency selection, discovery, grouping, editing, snoozing, priority, project/recency archive, search, collapse, restore, source immutability, session URL, persistence. Screenshots: .runtime/smoke.png and .runtime/archive-smoke.png',
+    'Electron smoke passed: CLI desktop-first navigation, show/resume iTerm actions, one-click and keyboard navigation, group attention/recency selection, discovery, grouping, editing, snoozing, priority, archive, source immutability and persistence. Screenshots: .runtime/smoke.png, .runtime/archive-smoke.png and .runtime/cli-smoke.png',
   );
 } finally {
   await app?.close();

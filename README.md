@@ -2,11 +2,11 @@
 
 A local Mac control plane for ongoing AI work. Keep using Codex and Claude; Monitor watches your existing sessions, preserves workstream priority, and opens the originating task.
 
-It observes **Codex desktop** tasks, **Claude desktop Code-tab** sessions and, with the optional hooks plugin, **terminal `claude` sessions**. Ordinary Claude chats are not represented.
+It observes **Codex desktop** tasks, **Claude desktop Code-tab** sessions and, with the companion plugins, **Codex CLI** and **terminal Claude** sessions. Ordinary Claude chats are not represented.
 
 ## Run
 
-Requires macOS, Node 24+, and Codex desktop and/or Claude desktop running with local tasks. No API key or extra agent harness.
+Requires macOS and local Codex or Claude tasks. Building from source requires Node 24+. No API key or extra agent harness.
 
 Download the Mac app from [GitHub Releases](https://github.com/JustinTervala/monitor/releases). The public repository and downloads do not require a GitHub login. Monitor uses the source apps already configured on that Mac; no Monitor account is needed.
 
@@ -55,6 +55,8 @@ The installer adds **monitor-codex** to your personal plugin marketplace, instal
 
 Hooks report recent activity and interruptions; the separate completion callback confirms finished turns. Desktop state supplies approvals and read receipts. If desktop state is unavailable, a confirmed result appears in **Needs review** with **read receipt unavailable**; opening the task lets the desktop provide its actual receipt. A `Stop` hook alone never counts as completion. Activity without a fresh event expires after two minutes instead of appearing to run forever.
 
+**Codex CLI tasks appear automatically and keep Open Codex as their main action**, opening the same saved task in desktop. The details pane also offers **Show in iTerm** for a live CLI session, or **Resume in iTerm** after it exits (`codex resume <session-id>` in its project directory). No conversation conversion or duplicate Monitor task is created. The companion records the owning process ID, start time and terminal; Monitor checks these before focusing a tab, including when `/new` reuses a CLI process. Opening desktop does not automatically stop or transfer an in-flight CLI turn. Finish or interrupt that turn before continuing elsewhere. Resume is unavailable while a live CLI or active desktop turn is observed; it starts only when you click it.
+
 After updating this checkout, rerun the installer and restart Codex. Remove the integration with `python3 scripts/install-codex.py --uninstall`; it restores your previous completion callback if Monitor still owns that setting. Your workstreams and recorded metadata stay intact. See [companion integration](docs/codex-companion.md) for details and verification limits.
 
 ## Use
@@ -83,7 +85,7 @@ Initial snapshots and reconnection backlogs are quiet. Result/request identities
 
 ## Integration limits
 
-This release observes **local Codex tasks**, not cloud/remote tasks. The companion also covers local CLI tasks in the same catalog; exact navigation opens them in the desktop app. It reads catalog metadata from Codex's SQLite database and subscribes as a non-owning follower to the desktop's local IPC stream. Monitor never resumes Codex tasks, sends prompts, or answers approvals. Only the explicit companion installer changes Codex settings.
+This release observes **local Codex tasks**, not cloud/remote tasks. It reads catalog metadata from Codex's SQLite database and subscribes as a non-owning follower to the desktop's local IPC stream. CLI activity remains observable with desktop closed when the companion is installed and trusted. Monitor never automatically resumes tasks, sends prompts, or answers approvals. Only the explicit companion installer changes Codex settings. The iTerm shortcut targets local controlling terminals; it cannot select a pane inside tmux or a session on another machine.
 
 For Claude, Monitor reads the desktop's Code-session records and the Claude Code process registry (`~/.claude/sessions`). It does not install hooks or change Claude settings. See [Claude integration](docs/claude-integration.md) for the state mapping and limits.
 

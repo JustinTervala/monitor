@@ -10,7 +10,7 @@ import {
 } from '../shared/queue';
 import type { Command, Session, Snapshot, TaskGroup } from '../shared/types';
 import { ArchiveIcon, ArchivePage } from './ArchivePage';
-import { resumeCommand } from '../shared/resume';
+import { canResumeInTerminal, resumeCommand } from '../shared/resume';
 
 type Editor =
   { kind: 'rename'; group: TaskGroup } | { kind: 'merge'; source: TaskGroup; target: TaskGroup };
@@ -106,7 +106,7 @@ export function App() {
       };
     if (session.terminalPid)
       return { label: 'Show in iTerm', run: () => window.monitor.showInTerminal(session.id) };
-    if (resumeCommand(session))
+    if (canResumeInTerminal(session))
       return { label: 'Resume in iTerm', run: () => window.monitor.resumeInTerminal(session.id) };
     return null;
   }
@@ -579,10 +579,20 @@ export function App() {
                       Show in iTerm
                     </button>
                   )}
+                  {session.openable !== false && canResumeInTerminal(session) && (
+                    <button
+                      className="quiet"
+                      onClick={() =>
+                        void attempt(() => window.monitor.resumeInTerminal(session.id))
+                      }
+                    >
+                      Resume in iTerm
+                    </button>
+                  )}
                   {resumeCommand(session) && (
                     <button
                       className="quiet"
-                      title={`${resumeCommand(session)}${session.openable === false ? '' : '\nAvoid resuming while Claude desktop has this session running.'}`}
+                      title={`${resumeCommand(session)}\nResume after the task has stopped in its current app or terminal.`}
                       onClick={() => void copyResume(session)}
                     >
                       {copied === session.id ? 'Copied ✓' : 'Copy resume command'}

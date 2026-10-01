@@ -2,6 +2,12 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { SessionProvider, ObserverCallbacks } from '../provider';
 import type { Session } from '../../shared/types';
+import {
+  isAgentProcess,
+  readTerminalProcesses,
+  sameTerminal,
+  type TerminalProcess,
+} from '../terminal';
 import { readCatalog, validThreadId } from './catalog';
 import { CodexTransport } from './transport';
 import { defaultHooksDirectory, readHookRecords, sessionFromHooks, type HookRecord } from './hooks';
@@ -27,9 +33,13 @@ export class CodexProvider implements SessionProvider {
   private protocolError: string | null = null;
   private hookRecords = new Map<string, HookRecord>();
   private startedAt = Date.now();
+  private terminalProcesses: Map<number, TerminalProcess> | null = new Map();
+  private terminalOwners = new Map<number, string>();
+  private refreshPromise: Promise<void> | null = null;
   constructor(
     readonly home = process.env.CODEX_HOME || join(homedir(), '.codex'),
     readonly hooksDirectory = defaultHooksDirectory(),
+    private readProcesses = readTerminalProcesses,
   ) {
     this.transport = new CodexTransport(join(home, 'ipc', 'ipc.sock'));
   }
@@ -81,6 +91,31 @@ export class CodexProvider implements SessionProvider {
   }
   private withHooks(session: Session, projection?: Projection) {
     const record = this.hookRecords.get(session.externalId);
+    const terminal = record?.terminal;
+    const process = terminal && this.terminalProcesses?.get(terminal.pid);
+    const alive =
+      terminal &&
+      !terminal.ended &&
+      process &&
+      isAgentProcess(process.command, 'codex') &&
+      sameTerminal(terminal, process) &&
+      this.terminalOwners.get(terminal.pid) === session.externalId;
+    const desktopBusy =
+      projection &&
+      (projection.threadRuntimeStatus?.type === 'active' ||
+        projection.requests?.length ||
+        projection.threadRuntimeStatus?.activeFlags?.length ||
+        latestTurn(projection)?.status === 'inProgress');
+    session = {
+      ...session,
+      resumeId: terminal ? session.externalId : null,
+      terminalPid: alive ? terminal.pid : null,
+      terminalIdentity: alive
+        ? { pid: terminal.pid, tty: terminal.tty, startedAt: terminal.startedAt }
+        : null,
+      terminalResumeAllowed:
+        !!terminal && this.terminalProcesses !== null && !alive && !desktopBusy,
+    };
     const event = record?.activity?.turnId ? record.activity : record?.completion;
     const turn = projection && latestTurn(projection);
     const oldIdleTurn =
@@ -117,9 +152,28 @@ export class CodexProvider implements SessionProvider {
       );
     }
   }
-  async refresh() {
+  refresh(): Promise<void> {
+    if (!this.refreshPromise)
+      this.refreshPromise = this.refreshNow().finally(() => {
+        this.refreshPromise = null;
+      });
+    return this.refreshPromise;
+  }
+  private async refreshNow() {
     try {
       this.hookRecords = readHookRecords(this.hooksDirectory);
+      this.terminalProcesses = await this.readProcesses(
+        [...this.hookRecords.values()].flatMap((record) =>
+          record.terminal ? [record.terminal.pid] : [],
+        ),
+      );
+      this.terminalOwners.clear();
+      // /new can keep the CLI process alive. Only its most recent task owns its tab.
+      for (const [id, record] of [...this.hookRecords].sort(
+        (a, b) => (a[1].terminal?.at || 0) - (b[1].terminal?.at || 0),
+      )) {
+        if (record.terminal) this.terminalOwners.set(record.terminal.pid, id);
+      }
       const rows = readCatalog(this.home, this.tracked);
       for (const row of rows) {
         const live = this.live.get(row.externalId);
@@ -242,6 +296,7 @@ export class CodexProvider implements SessionProvider {
   stop() {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    this.callbacks = null;
     this.transport.stop();
   }
 }

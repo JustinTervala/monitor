@@ -1,4 +1,11 @@
 import { execFile } from 'node:child_process';
+import type { ProviderId, TerminalIdentity } from '../shared/types';
+import {
+  isAgentProcess,
+  parseTerminalProcesses,
+  processColumns,
+  sameTerminal,
+} from '../providers/terminal';
 
 // AppleScript receives every value through `argv`; nothing is interpolated into
 // script source, so a path or command cannot change what the script does.
@@ -55,26 +62,38 @@ function explain(error: unknown): Error {
   return new Error(`iTerm2 did not respond: ${message}`);
 }
 
-/** The controlling terminal of a live Claude CLI process, e.g. `/dev/ttys004`. */
-export async function claudeTty(pid: number, exec: Run = run): Promise<string> {
+/** Resolve the live process again so an exited/reused PID cannot focus another task. */
+export async function agentTty(
+  pid: number,
+  provider: ProviderId,
+  identity?: TerminalIdentity | null,
+  exec: Run = run,
+): Promise<string> {
   if (!Number.isSafeInteger(pid) || pid <= 1) throw new Error('Invalid process id.');
   let out: string;
   try {
-    out = await exec('/bin/ps', ['-o', 'tty=,comm=', '-p', String(pid)]);
+    out = await exec('/bin/ps', ['-o', processColumns, '-p', String(pid)]);
   } catch {
-    throw new Error('This Claude session is no longer running.');
+    throw new Error('This session is no longer running.');
   }
-  const match = /^(ttys\d{1,4})\s+(.+)$/.exec(out);
-  // Guard against a reused pid: the process must still be Claude Code.
-  // (Homebrew installs `…/claude`; the native installer `…/claude/versions/<v>`.)
-  if (!match || !/claude/i.test(match[2]))
-    throw new Error('This Claude session is no longer running in a terminal.');
-  return `/dev/${match[1]}`;
+  const process = parseTerminalProcesses(out).get(pid);
+  if (
+    !process ||
+    !isAgentProcess(process.command, provider) ||
+    (identity && !sameTerminal(identity, process))
+  )
+    throw new Error('This session is no longer running in that terminal.');
+  return process.tty;
 }
 
 /** Bring the iTerm2 tab running this process to the front. */
-export async function showInITerm(pid: number, exec: Run = run) {
-  const tty = await claudeTty(pid, exec);
+export async function showInITerm(
+  pid: number,
+  provider: ProviderId,
+  identity?: TerminalIdentity | null,
+  exec: Run = run,
+) {
+  const tty = await agentTty(pid, provider, identity, exec);
   let result: string;
   try {
     result = await exec('/usr/bin/osascript', ['-e', SHOW, tty]);

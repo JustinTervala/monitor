@@ -4,14 +4,26 @@ const cliSessionId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 const shellQuote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
 
 /**
- * A POSIX shell command that resumes a Claude session in a terminal. Transcripts
- * are local and looked up per project, so it changes to the session directory.
+ * Resume the exact local task in its project directory using its native CLI.
  */
 export function resumeCommand(session: Session): string | null {
-  if (session.provider !== 'claude' || !session.resumeId || !cliSessionId.test(session.resumeId))
-    return null;
-  const resume = `claude --resume ${session.resumeId}`;
+  if (!session.resumeId || !cliSessionId.test(session.resumeId)) return null;
+  const resume =
+    session.provider === 'codex'
+      ? `codex resume ${session.resumeId}`
+      : `claude --resume ${session.resumeId}`;
   return session.directory?.startsWith('/') && !/[\0\n\r]/.test(session.directory)
     ? `cd ${shellQuote(session.directory)} && ${resume}`
     : resume;
+}
+
+export function canResumeInTerminal(session: Session): boolean {
+  return (
+    !!resumeCommand(session) &&
+    !session.terminalPid &&
+    session.status !== 'running' &&
+    (session.provider === 'codex'
+      ? session.terminalResumeAllowed === true
+      : session.openable === false)
+  );
 }

@@ -29,6 +29,32 @@ class FakeProvider implements SessionProvider {
     return `${this.id}://threads/${id}`;
   }
 }
+
+test('terminal resume refreshes source state and refuses a live task', async (t) => {
+  const path = mkdtempSync(join(tmpdir(), 'monitor-resume-'));
+  const provider = new FakeProvider();
+  const service = new MonitorService(
+    new MonitorStore(join(path, 'state.sqlite')),
+    [provider],
+    () => {},
+  );
+  t.after(() => {
+    service.stop();
+    rmSync(path, { recursive: true });
+  });
+  await service.start();
+  const id = '00000000-0000-4000-8000-000000000001';
+  const exited = session(id, { resumeId: id, status: 'review', terminalResumeAllowed: true });
+  provider.emit(exited);
+  assert.equal(
+    await service.terminalResumeCommand(exited.id),
+    `cd '/work/project' && codex resume ${id}`,
+  );
+  provider.refresh = async () => provider.emit({ ...exited, terminalPid: 42 });
+  await assert.rejects(service.terminalResumeCommand(exited.id), /still be active/);
+  provider.refresh = async () => provider.emit({ ...exited, terminalResumeAllowed: false });
+  await assert.rejects(service.terminalResumeCommand(exited.id), /still be active/);
+});
 test('initial results are quiet; new result notifies once, even if already read in Codex', async (t) => {
   const path = mkdtempSync(join(tmpdir(), 'monitor-test-'));
   const provider = new FakeProvider(),

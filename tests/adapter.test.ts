@@ -137,11 +137,23 @@ test('desktop observer follows, applies ordered patches, resyncs gaps and never 
         turnId: 'turn-older',
         at: Date.now(),
       },
+      terminal: {
+        pid: 2000000000,
+        tty: '/dev/ttys004',
+        startedAt: 'Thu Oct 1 04:52:11 2026',
+        at: Date.now(),
+        ended: true,
+      },
     }),
     { mode: 0o600 },
   );
   await provider.refresh();
   assert.equal(sessions[0].status, 'running'); // Current desktop state overrides hook history.
+  assert.equal(
+    sessions[0].terminalResumeAllowed,
+    false,
+    'a CLI task running in desktop cannot resume in iTerm',
+  );
   rmSync(hookFile);
   await provider.refresh();
   update({

@@ -1,6 +1,6 @@
 {
   "name": "monitor-codex",
-  "version": "0.2.0",
+  "version": "0.3.0+codex.20261001145715",
   "description": "Local lifecycle observations for the Monitor desktop app",
   "author": {
     "name": "Justin Tervala"

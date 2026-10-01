@@ -130,12 +130,14 @@ if (gotLock)
           notifications.add(notification);
           notification.on('click', () => {
             const pid = service?.terminalPid(event.sessionId);
-            // Terminal sessions have no app page: jump to the live iTerm2 tab, or show
-            // Monitor, which offers Resume in iTerm once the process has exited.
+            // Codex always opens in desktop; terminal-only Claude tasks use iTerm.
             const target = service?.canOpen(event.sessionId)
               ? openSession(event.sessionId)
               : pid
-                ? showInITerm(pid)
+                ? (() => {
+                    const terminal = service!.terminalTarget(event.sessionId);
+                    return showInITerm(terminal.pid, terminal.provider, terminal.identity);
+                  })()
                 : showWindow();
             void target.catch((error) =>
               dialog.showErrorBox('Could not open session', String(error)),
@@ -173,16 +175,13 @@ if (gotLock)
       };
       ipcMain.handle('monitor:show-terminal', async (event, id) => {
         validateSender(event);
-        const pid = service!.terminalPid(sessionId(id));
-        if (!pid) throw new Error('This session is not running in a terminal.');
-        await showInITerm(pid);
+        await service!.refresh();
+        const terminal = service!.terminalTarget(sessionId(id));
+        await showInITerm(terminal.pid, terminal.provider, terminal.identity);
       });
       ipcMain.handle('monitor:resume-terminal', async (event, id) => {
         validateSender(event);
-        // Only terminal sessions: resuming a desktop session could run it twice.
-        if (service!.canOpen(sessionId(id)))
-          throw new Error('Open this session in Claude desktop instead.');
-        await resumeInITerm(service!.resumeCommand(id));
+        await resumeInITerm(await service!.terminalResumeCommand(sessionId(id)));
       });
       ipcMain.handle('monitor:refresh', async (event) => {
         validateSender(event);

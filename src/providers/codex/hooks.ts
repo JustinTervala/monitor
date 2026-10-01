@@ -9,7 +9,7 @@ import {
 } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { Session } from '../../shared/types';
+import type { Session, TerminalIdentity } from '../../shared/types';
 import { validThreadId } from './catalog';
 
 export const defaultHooksDirectory = () =>
@@ -35,6 +35,32 @@ interface Observation {
 export interface HookRecord {
   activity?: Observation;
   completion?: Observation;
+  terminal?: TerminalIdentity & { at: number; ended: boolean };
+}
+
+function terminal(value: any, now: number): HookRecord['terminal'] {
+  if (
+    !value ||
+    !Number.isSafeInteger(value.pid) ||
+    value.pid <= 1 ||
+    typeof value.tty !== 'string' ||
+    !/^\/dev\/ttys\d{1,4}$/.test(value.tty) ||
+    typeof value.startedAt !== 'string' ||
+    !/^\w{3} \w{3} \d{1,2} \d{2}:\d{2}:\d{2} \d{4}$/.test(value.startedAt) ||
+    typeof value.at !== 'number' ||
+    !Number.isFinite(value.at) ||
+    value.at <= 0 ||
+    value.at > now + 1000 ||
+    typeof value.ended !== 'boolean'
+  )
+    return;
+  return {
+    pid: value.pid,
+    tty: value.tty,
+    startedAt: value.startedAt,
+    at: value.at,
+    ended: value.ended,
+  };
 }
 
 function observation(value: any, completion: boolean, now: number): Observation | undefined {
@@ -79,6 +105,7 @@ export function readHookRecords(directory: string, now = Date.now()): Map<string
         records.set(raw.sessionId, {
           activity: observation(raw.activity, false, now),
           completion: observation(raw.completion, true, now),
+          terminal: terminal(raw.terminal, now),
         });
       } catch {
         /* An atomic replacement or corrupt record must not stop other observations. */
