@@ -7,6 +7,7 @@ Monitor is a personal app for one person, Justin. There are no other users to su
 - Prefer replacing obsolete implementations over adding compatibility layers or long deprecation periods. Keep fallbacks only when they serve a present-day capability gap or failure mode, and explain that purpose.
 - This does not authorize deleting personal data. Preserve workstream names, membership, priority, snoozes, and archives unless a requested change requires a reset; explain any necessary data loss before doing it.
 - Work directly on `main` and push completed changes. Do not create pull requests or a review workflow for this project.
+- During iteration, commit and push without bumping the app version or creating a GitHub release for each push. Create a release and choose its version only when Justin asks. Local builds and installs can use the current version; refresh a plugin cachebuster when needed for Codex to pick up changed plugin code.
 - Keep the existing Codex and Claude harnesses. Session status belongs to the source app; grouping, ordering, snoozing, and local archiving belong to Monitor.
 - Keep integrations local. Never persist prompts, responses, tool arguments, credentials, or raw hook payloads. Use synthetic fixtures in tests.
 
