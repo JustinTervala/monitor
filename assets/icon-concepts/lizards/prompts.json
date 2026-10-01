@@ -1,0 +1,21 @@
+{
+  "generator": "Built-in image_gen",
+  "purpose": "Monitor app icon concepts for selection; not installed as the app icon.",
+  "concepts": [
+    {
+      "name": "01 — The Watchkeeper",
+      "prompt": "Use case: logo-brand. Create ONE polished square macOS app icon concept for a personal AI task-monitoring app called Monitor. No text or letters. Subject: a friendly sage-green MONITOR LIZARD with a long gently tapered snout, small confident eyes, sturdy little legs and a long tail, curled into a near-circle around THREE small glowing status lights: amber, pale green, and muted cream. Its head rises slightly out of the circle, with a subtly smug, watchful expression, like it has all your running tasks under control. Style: beautiful minimal flat illustration with bold soft shapes, dark forest-green contours, very restrained shading and a little character; adult-friendly, not babyish. Warm ivory rounded-square app tile, centered icon occupying 80% of the tile, generous safe margins. Strong readable silhouette at Dock sizes. Green body, dark green details, amber accents. No scales texture, no accessories, no lettering, no interface mockup, no gradients outside the tile, no watermark. A single icon, not a contact sheet.",
+      "file": "watchkeeper-v1.png"
+    },
+    {
+      "name": "02 — The Desk Buddy",
+      "prompt": "Use case: stylized-concept. Create ONE square macOS app icon concept: a charming little sage-green monitor lizard sitting atop a tidy stack of THREE thick rounded task tiles, like a tiny desk supervisor. The lizard has an elongated snout, bright attentive dark eyes, four small sturdy legs, and a long tail curled neatly around the bottom of the stack. It rests its two front paws on the top tile and leans forward, looking calmly pleased with itself. The tiles are warm cream, muted forest green and ochre amber; simple blank surfaces with no text. Render as a premium softly sculpted clay mascot, subtle dimensionality and soft studio light, mostly matte surfaces, strong uncluttered silhouette, playful but refined. Warm ivory rounded-square app tile, front three-quarter view, centered, subject occupies about 80% of the tile, safe margins. Intended for an AI workstream monitor called Monitor, but include NO name, letters, numbers, or writing. No extra objects, no detailed scales, no dinosaur spikes, no gecko suction pads, no watermark. One icon only.",
+      "file": "desk-buddy-v1.png"
+    },
+    {
+      "name": "03 — The Lookout",
+      "prompt": "Use case: logo-brand. Design ONE distinctive square macOS Dock icon for a personal AI-task control-plane app. Subject: an alert, clever little MONITOR LIZARD drawn as a bold playful graphic. Full body in a compact upright S-shaped pose: long tail curves up around one side, elongated head turns back toward the viewer, one small front paw gently holds a single warm amber glowing orb like a task needing attention. Its expression is curious and a little mischievous. Clear monitor-lizard anatomy simplified into just a few rounded geometric shapes: tapered snout, sturdy feet without suction pads, smooth body, long tail. Pale sage/lime-green lizard on a deep forest-green rounded-square tile, tiny warm cream eye highlights, amber orb. Flat contemporary editorial illustration, crisp edges, very limited palette, gentle rounded shapes, no outlines finer than Dock readability allows. Centered with comfortable safe margins, distinctive readable silhouette at 32 pixels. No text, no UI, no other objects, no watermark, no collage, no additional animals.",
+      "file": "lookout-v1.png"
+    }
+  ]
+}
