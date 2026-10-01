@@ -230,14 +230,6 @@ h1 {
   overflow: auto;
   padding: 20px 25px 40px;
 }
-.queue-hint {
-  font-size: 10px;
-  color: #8b988e;
-  padding: 0 10px 20px;
-}
-.queue-hint span {
-  white-space: nowrap;
-}
 .queue-section {
   margin-bottom: 27px;
 }
@@ -821,9 +813,6 @@ footer .quiet {
   }
   .with-details .project-tag,
   .with-details .task-count {
-    display: none;
-  }
-  .queue-hint span {
     display: none;
   }
   .titlebar > span:last-child {

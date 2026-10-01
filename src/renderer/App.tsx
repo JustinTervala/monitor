@@ -370,10 +370,6 @@ export function App() {
           />
         ) : (
           <main className="queue">
-            <div className="queue-hint">
-              Drag a row to group. Drag ⠿ to prioritize.{' '}
-              <span>Numbers stay fixed as states change.</span>
-            </div>
             {priorityView ? (
               <section className="queue-section">
                 <div className="section-heading">
