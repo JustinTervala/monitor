@@ -206,6 +206,14 @@ export function App() {
   function row(group: TaskGroup) {
     const section = groupSection(state, group),
       sessions = groupSessions(state, group);
+    const nextTask = sessions
+      .filter((session) => primary(session))
+      .sort(
+        (a, b) =>
+          sectionOrder.indexOf(a.status) - sectionOrder.indexOf(b.status) ||
+          b.updatedAt - a.updatedAt,
+      )[0];
+    const destination = nextTask && primary(nextTask);
     const dropClass =
       drop?.id === group.id
         ? drag?.mode === 'merge'
@@ -250,9 +258,19 @@ export function App() {
           <span className="project-tag">{projectTag(state, group)}</span>
           <span className="task-count" title={`${sessions.length} tasks`}>
             {sessions.length}
-            <span>↗</span>
           </span>
         </button>
+        {destination && (
+          <button
+            className="open-row-action"
+            data-testid="open-task"
+            aria-label={`${destination.label}: ${nextTask.title}`}
+            title={`${destination.label}: ${nextTask.title}`}
+            onClick={() => void go(nextTask)}
+          >
+            {destination.label.replace('Open in ', 'Open ')} <span aria-hidden>↗</span>
+          </button>
+        )}
         <button
           className="quiet archive-row-action"
           title="Archive workstream"

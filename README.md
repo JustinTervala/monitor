@@ -60,7 +60,7 @@ After updating this checkout, rerun the installer and restart Codex. Remove the 
 ## Use
 
 - All non-archived tasks in the local Codex catalog and Claude Code tab appear automatically, including tasks created while Monitor is running. There is no import step or task-count limit. Codex discovery refreshes every second; Claude every three seconds.
-- Select a row to inspect its tasks. **Open in Codex** / **Open in Claude** opens that exact task.
+- Use **Open Codex** / **Open Claude** directly on a queue row to open the task in one click. For a group, the shortcut picks a task needing review first, then running, unavailable, and read; the most recent task wins ties. Hover to see the exact task. Terminal Claude tasks offer **Show in iTerm** or **Resume in iTerm**. Select the row itself to inspect or manage all its tasks.
 - Drag a row onto another row and name the combined workstream. One group occupies one row.
 - Drag the **⠿ handle** to reorder. The **Priority** view shows the global order across sections; arrow buttons in details provide keyboard-accessible ordering.
 - **Edit group** changes its name or project tag. **Detach** splits out a member. Use group snoozing to put a workstream aside.

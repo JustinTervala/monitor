@@ -1,6 +1,6 @@
 {
   "name": "agent-workstream-monitor",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "license": "MIT",
   "description": "A local Mac control plane for Codex and Claude workstreams",

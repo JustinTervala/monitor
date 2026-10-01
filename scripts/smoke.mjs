@@ -111,19 +111,90 @@ try {
   );
   assert.equal(await page.locator('select').count(), 0);
   assert.equal(await page.getByRole('button', { name: /Add tasks|Browse tasks/ }).count(), 0);
+  // Queue shortcuts navigate directly without selecting a row or opening details.
+  await app.evaluate(({ shell }) => {
+    globalThis.monitorOpened = [];
+    shell.openExternal = async (url) => {
+      globalThis.monitorOpened.push(url);
+    };
+  });
+  await page
+    .getByRole('button', { name: 'Open in Codex: Build the billing rollout', exact: true })
+    .click();
+  assert.deepEqual(await app.evaluate(() => globalThis.monitorOpened), ['codex://threads/aaaaaa']);
+  assert.equal(await page.getByRole('complementary', { name: 'Workstream details' }).count(), 0);
+  const keyboardShortcut = page.getByRole('button', {
+    name: 'Open in Codex: Review the billing changes',
+    exact: true,
+  });
+  await keyboardShortcut.focus();
+  await keyboardShortcut.press('Enter');
+  assert.deepEqual(await app.evaluate(() => globalThis.monitorOpened), [
+    'codex://threads/aaaaaa',
+    'codex://threads/bbbbbb',
+  ]);
+  assert.equal(await page.getByRole('complementary', { name: 'Workstream details' }).count(), 0);
   await page.getByRole('button', { name: /Build the billing rollout.*1 running/ }).click();
   await page.getByRole('button', { name: 'Edit group', exact: true }).click();
   await page.getByRole('textbox', { name: 'Group name' }).fill('Billing rollout');
   await page.getByRole('button', { name: 'Save changes' }).click();
   const source = page.getByTestId('group-row').filter({ hasText: 'Review the billing changes' });
   const target = page.getByTestId('group-row').filter({ hasText: 'Billing rollout' });
-  await source.dragTo(target);
+  // Aim at the row body, avoiding its actions, and cross the target twice so
+  // Electron reliably receives dragover before drop.
+  const sourceBox = await source.boundingBox(),
+    targetBox = await target.boundingBox();
+  await page.mouse.move(sourceBox.x + 90, sourceBox.y + 25);
+  await page.mouse.down();
+  await page.mouse.move(sourceBox.x + 100, sourceBox.y + 25, { steps: 3 });
+  await page.mouse.move(targetBox.x + 120, targetBox.y + 25, { steps: 12 });
+  await page.mouse.move(targetBox.x + 135, targetBox.y + 25, { steps: 3 });
+  await page.mouse.up();
   await page.getByRole('textbox', { name: 'Group name' }).fill('Billing rollout');
   await page.getByRole('button', { name: 'Create group', exact: true }).click();
   await page.waitForFunction(
     () => document.querySelectorAll('[data-testid="group-row"]').length === 2,
   );
   assert.equal(await page.getByTestId('session-card').count(), 2);
+  await page.getByRole('button', { name: 'Close details', exact: true }).click();
+  await target.getByTestId('open-task').click();
+  assert.equal(
+    (await app.evaluate(() => globalThis.monitorOpened)).at(-1),
+    'codex://threads/bbbbbb',
+  );
+  assert.equal(await page.getByRole('complementary', { name: 'Workstream details' }).count(), 0);
+  // If both need review, prefer the task with newer source activity.
+  for (const client of clients)
+    client.write(
+      frame({
+        type: 'broadcast',
+        method: 'thread-stream-state-changed',
+        version: 11,
+        sourceClientId: 'fixture',
+        params: {
+          hostId: 'local',
+          conversationId: 'aaaaaa',
+          change: {
+            type: 'snapshot',
+            revision: 2,
+            conversationState: {
+              id: 'aaaaaa',
+              hasUnreadTurn: true,
+              threadRuntimeStatus: { type: 'idle' },
+              turns: [{ turnId: 'aaaaaa-turn1', status: 'completed', turnStartedAtMs: 1 }],
+            },
+          },
+        },
+      }),
+    );
+  await target
+    .getByRole('button', { name: 'Open in Codex: Build the billing rollout', exact: true })
+    .click();
+  assert.equal(
+    (await app.evaluate(() => globalThis.monitorOpened)).at(-1),
+    'codex://threads/aaaaaa',
+  );
+  await target.locator('.row-select').click();
   await page.getByLabel('Snooze workstream').selectOption('manual');
   assert.equal(
     await page
@@ -267,7 +338,7 @@ try {
   await reopened.getByRole('button', { name: /^Queue / }).click();
   await reopened.getByTestId('group-row').filter({ hasText: 'A newly created task' }).waitFor();
   console.log(
-    'Electron smoke passed: discovery, grouping, editing, snoozing, priority, project/recency archive, search, collapse, restore, source immutability, session URL, persistence. Screenshots: .runtime/smoke.png and .runtime/archive-smoke.png',
+    'Electron smoke passed: one-click and keyboard task navigation, group attention/recency selection, discovery, grouping, editing, snoozing, priority, project/recency archive, search, collapse, restore, source immutability, session URL, persistence. Screenshots: .runtime/smoke.png and .runtime/archive-smoke.png',
   );
 } finally {
   await app?.close();

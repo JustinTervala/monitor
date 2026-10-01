@@ -293,6 +293,25 @@ h1 {
   background: #eef3eb;
   border-color: #98b18f;
 }
+.open-row-action {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 6px;
+  margin-right: 6px;
+  min-height: 30px;
+  padding: 5px 9px;
+  font-size: 11px;
+  color: #4f6d43;
+  background: #f1f6ed;
+  border-color: #d9e4d2;
+  white-space: nowrap;
+}
+.open-row-action:hover {
+  color: #314f3d;
+  background: #e4eedb;
+  border-color: #b2c8a5;
+}
 .archive-row-action {
   display: flex;
   margin-right: 10px;
@@ -459,9 +478,6 @@ h1 {
   gap: 12px;
   min-width: 27px;
   justify-content: flex-end;
-}
-.task-count > span {
-  color: #a9b7a2;
 }
 .empty-section {
   font-size: 11px;
