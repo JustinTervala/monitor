@@ -248,7 +248,7 @@ export function App() {
           {state.groups.indexOf(group) + 1}
         </span>
         <button className="row-select" onClick={() => setSelected(group.id)}>
-          <span className={`status-dot ${section}`} />
+          <span className={`status-dot ${section}`} aria-hidden="true" />
           <span className="row-name">
             {groupName(state, group)}
             <span className="row-meta">
@@ -391,7 +391,7 @@ export function App() {
                     aria-label={sectionLabels[section]}
                   >
                     <div className="section-heading">
-                      <span className={`status-dot ${section}`} />
+                      <span className={`status-dot ${section}`} aria-hidden="true" />
                       <h2>{sectionLabels[section]}</h2>
                       <span>{groups.length}</span>
                     </div>
@@ -488,7 +488,7 @@ export function App() {
             {groupSessions(state, selectedGroup).map((session) => (
               <div className="session-card" key={session.id} data-testid="session-card">
                 <div className="session-status">
-                  <span className={`status-dot ${session.status}`} />
+                  <span className={`status-dot ${session.status}`} aria-hidden="true" />
                   {statusLabel[session.status]}
                   <span className="provider-name">{session.provider}</span>
                 </div>
@@ -611,7 +611,10 @@ export function App() {
       </div>
       <footer>
         <div className="connection" title={codex?.message}>
-          <span className={`connection-dot ${codex?.state === 'live' ? 'connected' : ''}`} />
+          <span
+            className={`connection-dot ${codex?.state === 'live' ? 'connected' : ''}`}
+            aria-hidden="true"
+          />
           <span>
             {codex?.state === 'live'
               ? 'Codex connected'

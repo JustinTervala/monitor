@@ -109,6 +109,13 @@ try {
     async () =>
       (await window.monitor.snapshot()).state.sessions['codex:bbbbbb'].status === 'review',
   );
+  assert.equal(await app.evaluate(({ nativeTheme }) => nativeTheme.shouldUseDarkColors), true);
+  assert.equal(
+    await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme),
+    'dark',
+  );
+  mkdirSync('.runtime', { recursive: true });
+  await page.screenshot({ path: '.runtime/midnight-statuses.png' });
   assert.equal(await page.locator('select').count(), 0);
   assert.equal(await page.getByRole('button', { name: /Add tasks|Browse tasks/ }).count(), 0);
   // Queue shortcuts navigate directly without selecting a row or opening details.
@@ -136,6 +143,7 @@ try {
   assert.equal(await page.getByRole('complementary', { name: 'Workstream details' }).count(), 0);
   await page.getByRole('button', { name: /Build the billing rollout.*1 running/ }).click();
   await page.getByRole('button', { name: 'Edit group', exact: true }).click();
+  await page.getByRole('dialog').screenshot({ path: '.runtime/midnight-editor.png' });
   await page.getByRole('textbox', { name: 'Group name' }).fill('Billing rollout');
   await page.getByRole('button', { name: 'Save changes' }).click();
   const source = page.getByTestId('group-row').filter({ hasText: 'Review the billing changes' });

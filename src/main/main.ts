@@ -6,6 +6,7 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  nativeTheme,
   Notification,
   shell,
   Tray,
@@ -19,6 +20,7 @@ import { CodexProvider } from '../providers/codex';
 import { ClaudeProvider } from '../providers/claude';
 
 app.setName('Monitor');
+nativeTheme.themeSource = 'dark';
 if (process.env.MONITOR_DATA_DIR) app.setPath('userData', process.env.MONITOR_DATA_DIR);
 let window: BrowserWindow | null = null,
   service: MonitorService | null = null,
@@ -80,7 +82,7 @@ async function showWindow() {
     minHeight: 480,
     title: 'Monitor',
     titleBarStyle: 'hiddenInset',
-    backgroundColor: '#f7f8f6',
+    backgroundColor: '#141a27',
     show: false,
     webPreferences: {
       preload: join(__dirname, 'preload.cjs'),

@@ -61,6 +61,8 @@ After updating this checkout, rerun the installer and restart Codex. Remove the 
 
 ## Use
 
+Monitor uses the Midnight theme: dark blue surfaces and periwinkle accents. Statuses use both color and shape: amber diamond for **Needs review**, blue filled circle for **Running**, slate ring for **Read**, violet square for **Status unavailable**, and pale pause bars for **Snoozed**. Text labels remain alongside these markers.
+
 - All non-archived tasks in the local Codex catalog and Claude Code tab appear automatically, including tasks created while Monitor is running. There is no import step or task-count limit. Codex discovery refreshes every second; Claude every three seconds.
 - Use **Open Codex** / **Open Claude** directly on a queue row to open the task in one click. For a group, the shortcut picks a task needing review first, then running, unavailable, and read; the most recent task wins ties. Hover to see the exact task. Terminal Claude tasks offer **Show in iTerm** or **Resume in iTerm**. Select the row itself to inspect or manage all its tasks.
 - Drag a row onto another row and name the combined workstream. One group occupies one row.
