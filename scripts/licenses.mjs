@@ -51,10 +51,12 @@ export function thirdPartyNotices(root = projectRoot) {
         )
         .join('\n'),
   );
+  const iconNotices = readFileSync(join(root, 'assets/provider-icons/NOTICE.md'), 'utf8').trim();
+  if (!iconNotices) throw new Error('Missing provider icon attribution.');
   return [
     '# Third-party notices',
     '',
-    'Generated with `npm run licenses` from the installed versions pinned in `package-lock.json`.',
+    'Generated with `npm run licenses` from the installed versions pinned in `package-lock.json` and bundled asset notices.',
     'These notices cover Monitor’s production dependency graph, the Electron runtime, and Vite/esbuild helper code emitted into the bundles. The build tools themselves are not redistributed in the app.',
     '',
     'The packaged app also includes Electron’s complete upstream `LICENSES.chromium.html` unchanged, covering Chromium and its bundled third-party components. Find it beside these notices in `Monitor.app/Contents/Resources/licenses/`.',
@@ -62,6 +64,7 @@ export function thirdPartyNotices(root = projectRoot) {
     'Monitor’s own source code is licensed separately under the MIT license in `LICENSE`. The original copyright and permission notices below continue to apply to their respective components.',
     '',
     ...sections,
+    iconNotices + '\n',
   ].join('\n');
 }
 

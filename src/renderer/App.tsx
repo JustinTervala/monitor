@@ -11,6 +11,7 @@ import {
 } from '../shared/queue';
 import type { Command, Session, Snapshot, TaskGroup } from '../shared/types';
 import { ArchiveIcon, ArchivePage } from './ArchivePage';
+import { ProviderIcon } from './ProviderIcon';
 import { canResumeInTerminal, resumeCommand } from '../shared/resume';
 
 type Editor =
@@ -269,6 +270,7 @@ export function App() {
             title={`${destination.label}: ${nextTask.title}`}
             onClick={() => void go(nextTask)}
           >
+            <ProviderIcon provider={nextTask.provider} />
             {destination.label.replace('Open in ', 'Open ')} <span aria-hidden>↗</span>
           </button>
         )}
@@ -491,7 +493,10 @@ export function App() {
                 <div className="session-status">
                   <span className={`status-dot ${session.status}`} aria-hidden="true" />
                   {statusLabel[session.status]}
-                  <span className="provider-name">{session.provider}</span>
+                  <span className="provider-name">
+                    <ProviderIcon provider={session.provider} />
+                    {session.provider}
+                  </span>
                 </div>
                 {primary(session) ? (
                   <button className="session-link" onClick={() => void go(session)}>

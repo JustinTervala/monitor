@@ -36,6 +36,10 @@ function fixture(t) {
   );
   write('package-lock.json', JSON.stringify(lock));
   write('LICENSE', 'Monitor license text.\n');
+  write(
+    'assets/provider-icons/NOTICE.md',
+    '## Provider icons\n\nBundled icon permission notice.\n',
+  );
   return { root, write };
 }
 
@@ -48,6 +52,7 @@ test('notices cover transitive packages, Electron and build helpers, preserving 
   assert.match(notices, /## vite 1\.0\.0/);
   assert.match(notices, /## esbuild 1\.0\.0/);
   assert.match(notices, /Additional attribution must survive\./);
+  assert.match(notices, /Bundled icon permission notice\./);
   assert.doesNotMatch(notices, /build-tool/);
   write('THIRD_PARTY_NOTICES.md', notices);
   const app = join(root, 'Monitor.app');
@@ -68,6 +73,9 @@ test('distribution rejects stale notices, unlocked versions and missing license 
   write('node_modules/runtime/NOTICE', 'A new mandatory notice.\n');
   assert.throws(() => checkNotices(root), /stale/);
   assert.throws(() => packageLicenses(join(root, 'Monitor.app'), root), /stale/);
+  write('assets/provider-icons/NOTICE.md', '');
+  assert.throws(() => thirdPartyNotices(root), /Missing provider icon attribution/);
+  write('assets/provider-icons/NOTICE.md', 'Updated icon permission notice.\n');
   write(
     'node_modules/runtime/package.json',
     JSON.stringify({ name: 'runtime', version: '2.0.0', license: 'MIT' }),
