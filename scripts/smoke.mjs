@@ -954,9 +954,7 @@ try {
   await taskView.getByText('2 hidden · 1 need review · 1 running', { exact: true }).waitFor();
   await taskView.getByRole('button', { name: 'Expand all', exact: true }).click();
   await taskView.getByRole('button', { name: 'Focus branch', exact: true }).click();
-  await taskView.getByRole('button', { name: '↗ Expand view', exact: true }).click();
-  assert.equal(await taskView.getByRole('complementary', { name: 'Task details' }).count(), 0);
-  await taskView.getByRole('button', { name: '↙ Show details', exact: true }).click();
+  assert.equal(await taskView.getByRole('complementary', { name: 'Task details' }).count(), 1);
   await taskView.getByRole('button', { name: 'Try caching ↗', exact: true }).click();
   await taskView.getByRole('heading', { name: 'Try caching', exact: true }).waitFor();
   await taskView.getByRole('button', { name: 'Investigate invalidation ↗', exact: true }).click();

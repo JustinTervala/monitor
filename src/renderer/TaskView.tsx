@@ -93,7 +93,6 @@ export function TaskView({
 }) {
   const [collapsed, setCollapsed] = useState(new Set<string>());
   const [focused, setFocused] = useState(false);
-  const [expanded, setExpanded] = useState(false);
   const [showFamily, setShowFamily] = useState(initialSection === 'family');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
@@ -140,7 +139,7 @@ export function TaskView({
     observer.observe(element);
     for (const row of element.children) if (row instanceof HTMLElement) observer.observe(row);
     return () => observer.disconnect();
-  }, [geometry, expanded, familyVisible, state]);
+  }, [geometry, familyVisible, state]);
   function choose(id: string) {
     // Reveal a destination reached from its parent/child links without resetting
     // any other branch, including when the family is currently focused.
@@ -165,10 +164,7 @@ export function TaskView({
   const groupCount = new Set(familyTasks.map((n) => groups.get(n.id)?.id).filter(Boolean)).size;
   const label = primaryLabel(session);
   return (
-    <main
-      className={`task-view${familyVisible && expanded ? ' tree-expanded' : ''}`}
-      aria-label="Task view"
-    >
+    <main className="task-view" aria-label="Task view">
       <header className="task-header">
         <nav className="task-breadcrumb" aria-label="Task breadcrumbs">
           <button onClick={back}>{backLabel}</button>
@@ -211,7 +207,6 @@ export function TaskView({
             aria-pressed={!familyVisible}
             onClick={() => {
               setShowFamily(false);
-              setExpanded(false);
             }}
           >
             Details
@@ -235,13 +230,6 @@ export function TaskView({
                     : `${familyTasks.length} ${familyTasks.length === 1 ? 'task' : 'tasks'} across ${groupCount} ${groupCount === 1 ? 'group' : 'groups'}`}
                 </p>
               </div>
-              <button
-                className="quiet"
-                aria-pressed={expanded}
-                onClick={() => setExpanded(!expanded)}
-              >
-                {expanded ? '↙ Show details' : '↗ Expand view'}
-              </button>
             </div>
             <div className="fork-toolbar">
               <button aria-pressed={focused} onClick={() => setFocused(!focused)}>
@@ -392,109 +380,107 @@ export function TaskView({
             </div>
           </section>
         )}
-        {(!familyVisible || !expanded) && (
-          <aside className="task-details" aria-label="Task details">
-            <h3>Task details</h3>
-            {group && (
-              <div className="task-field">
-                <span className="task-field-label">Group</span>
-                <div className="task-group-value">
-                  <strong data-testid="task-group-name">{groupName(state, group)}</strong>
-                  <button
-                    ref={changeGroupButton}
-                    disabled={busy}
-                    onClick={() => setChangingGroup(true)}
-                  >
-                    Change group
-                  </button>
-                </div>
-                <button className="task-text-link" onClick={() => viewGroup(group)}>
-                  View group →
-                </button>
-                <span className="task-field-note">{location(group)}</span>
-              </div>
-            )}
+        <aside className="task-details" aria-label="Task details">
+          <h3>Task details</h3>
+          {group && (
             <div className="task-field">
-              <span className="task-field-label">Project directory</span>
-              <code>{displayDirectory(session.directory, homeDirectory) || 'Unavailable'}</code>
-            </div>
-            <div className="task-field">
-              <span className="task-field-label">Source status</span>
-              <p>{session.detail}</p>
-            </div>
-            <hr />
-            <div className="task-field">
-              <span className="task-field-label">Forked from</span>
-              {parent ? (
-                <button className="task-text-link" onClick={() => choose(parent.id)}>
-                  {parent.title} ↗
-                </button>
-              ) : (
-                <span>
-                  {parentId
-                    ? 'Parent task unavailable'
-                    : session.lineage
-                      ? 'No parent recorded'
-                      : 'Ancestry unavailable'}
-                </span>
-              )}
-            </div>
-            {session.createdAt && (
-              <div className="task-field">
-                <span className="task-field-label">Task created</span>
-                <time dateTime={new Date(session.createdAt).toISOString()}>
-                  {new Date(session.createdAt).toLocaleString([], {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })}
-                </time>
-              </div>
-            )}
-            <div className="task-field">
-              <span className="task-field-label">Direct forks · {direct.length}</span>
-              {direct.length ? (
-                direct.map((id) => {
-                  const child = family.nodes.get(id)!.session;
-                  return (
-                    child && (
-                      <div className="task-relative" key={id}>
-                        <button className="task-text-link" onClick={() => choose(id)}>
-                          {child.title} ↗
-                        </button>
-                        <small>
-                          {groups.get(id) ? groupName(state, groups.get(id)!) : 'No group'}
-                        </small>
-                      </div>
-                    )
-                  );
-                })
-              ) : (
-                <span className="task-field-note">No recorded forks</span>
-              )}
-            </div>
-            <div className="task-extra-actions">
-              {actions(session)}
-              {group && group.sessionIds.length > 1 && (
+              <span className="task-field-label">Group</span>
+              <div className="task-group-value">
+                <strong data-testid="task-group-name">{groupName(state, group)}</strong>
                 <button
+                  ref={changeGroupButton}
                   disabled={busy}
-                  onClick={async () => {
-                    setBusy(true);
-                    try {
-                      await detach(group.id, session.id);
-                    } finally {
-                      setBusy(false);
-                    }
-                  }}
+                  onClick={() => setChangingGroup(true)}
                 >
-                  Move to own group
+                  Change group
                 </button>
-              )}
+              </div>
+              <button className="task-text-link" onClick={() => viewGroup(group)}>
+                View group →
+              </button>
+              <span className="task-field-note">{location(group)}</span>
             </div>
-          </aside>
-        )}
+          )}
+          <div className="task-field">
+            <span className="task-field-label">Project directory</span>
+            <code>{displayDirectory(session.directory, homeDirectory) || 'Unavailable'}</code>
+          </div>
+          <div className="task-field">
+            <span className="task-field-label">Source status</span>
+            <p>{session.detail}</p>
+          </div>
+          <hr />
+          <div className="task-field">
+            <span className="task-field-label">Forked from</span>
+            {parent ? (
+              <button className="task-text-link" onClick={() => choose(parent.id)}>
+                {parent.title} ↗
+              </button>
+            ) : (
+              <span>
+                {parentId
+                  ? 'Parent task unavailable'
+                  : session.lineage
+                    ? 'No parent recorded'
+                    : 'Ancestry unavailable'}
+              </span>
+            )}
+          </div>
+          {session.createdAt && (
+            <div className="task-field">
+              <span className="task-field-label">Task created</span>
+              <time dateTime={new Date(session.createdAt).toISOString()}>
+                {new Date(session.createdAt).toLocaleString([], {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                })}
+              </time>
+            </div>
+          )}
+          <div className="task-field">
+            <span className="task-field-label">Direct forks · {direct.length}</span>
+            {direct.length ? (
+              direct.map((id) => {
+                const child = family.nodes.get(id)!.session;
+                return (
+                  child && (
+                    <div className="task-relative" key={id}>
+                      <button className="task-text-link" onClick={() => choose(id)}>
+                        {child.title} ↗
+                      </button>
+                      <small>
+                        {groups.get(id) ? groupName(state, groups.get(id)!) : 'No group'}
+                      </small>
+                    </div>
+                  )
+                );
+              })
+            ) : (
+              <span className="task-field-note">No recorded forks</span>
+            )}
+          </div>
+          <div className="task-extra-actions">
+            {actions(session)}
+            {group && group.sessionIds.length > 1 && (
+              <button
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await detach(group.id, session.id);
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                Move to own group
+              </button>
+            )}
+          </div>
+        </aside>
         {!familyVisible && group && groupTasks.length > 1 && (
           <section className="task-group-members" aria-label="Tasks in this group">
             <h3>

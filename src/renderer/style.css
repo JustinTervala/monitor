@@ -655,9 +655,6 @@ h1 {
   background: var(--selected);
   border-top: 1px solid var(--border);
 }
-.tree-expanded .task-layout {
-  grid-template-columns: minmax(0, 1fr);
-}
 @container (max-width: 820px) {
   .task-layout,
   .task-overview.with-members {
