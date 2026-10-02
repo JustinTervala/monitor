@@ -858,7 +858,7 @@ export function App() {
           </span>
         </div>
         <span className="footer-note">
-          {codex?.state !== 'live' ? codex?.message : `${tracked.size} tasks · local observation`}
+          {codex?.state !== 'live' ? codex?.message : `${tracked.size} tasks`}
         </span>
         <button className="quiet" onClick={() => void refresh()}>
           Refresh ↻
