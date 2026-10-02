@@ -42,7 +42,7 @@ function location(group: TaskGroup) {
         : 'In library';
 }
 
-function ForkIcon() {
+export function ForkIcon() {
   return (
     <svg
       width="17"
@@ -64,6 +64,7 @@ function ForkIcon() {
 export function TaskView({
   state,
   sessionId,
+  initialSection,
   homeDirectory,
   backLabel,
   back,
@@ -77,6 +78,7 @@ export function TaskView({
 }: {
   state: MonitorState;
   sessionId: string;
+  initialSection: 'details' | 'family';
   homeDirectory: string;
   backLabel: string;
   back: () => void;
@@ -91,7 +93,7 @@ export function TaskView({
   const [collapsed, setCollapsed] = useState(new Set<string>());
   const [focused, setFocused] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [showFamily, setShowFamily] = useState(false);
+  const [showFamily, setShowFamily] = useState(initialSection === 'family');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const family = useMemo(() => forkFamily(state, sessionId), [state, sessionId]);

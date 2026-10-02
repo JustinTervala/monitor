@@ -860,6 +860,22 @@ h1 {
   background: var(--button-tint-hover);
   border-color: var(--border-hover);
 }
+.family-shortcut {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.open-row-action.family-shortcut {
+  width: auto;
+  padding: 5px 9px;
+  font-size: 11px;
+}
+.family-shortcut svg {
+  flex-shrink: 0;
+}
 .archive-row-action {
   display: flex;
   margin-right: 10px;
@@ -1199,8 +1215,8 @@ h1 {
 }
 .session-actions {
   display: flex;
-  justify-content: space-between;
-  gap: 3px;
+  flex-wrap: wrap;
+  gap: 6px;
   margin-top: 13px;
 }
 .session-actions button {

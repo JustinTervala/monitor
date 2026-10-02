@@ -1,6 +1,20 @@
 import { isHiddenSession } from './queue';
 import type { MonitorState, Session } from './types';
 
+/** Find shortcut destinations without rebuilding every task's family on list pages. */
+export function forkRelatedIds(state: MonitorState): Set<string> {
+  const sessions = Object.values(state.sessions).filter((s) => !isHiddenSession(s));
+  const visible = new Set(sessions.map((s) => s.id));
+  const related = new Set<string>();
+  for (const session of sessions) {
+    const parent = session.lineage?.parentId;
+    if (!parent || parent === session.id || !parent.startsWith(`${session.provider}:`)) continue;
+    related.add(session.id);
+    if (visible.has(parent)) related.add(parent);
+  }
+  return related;
+}
+
 export interface ForkNode {
   id: string;
   session?: Session;

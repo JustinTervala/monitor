@@ -140,6 +140,7 @@ try {
     true,
   );
   assert.equal(await page.getByRole('button', { name: /Add tasks|Browse tasks/ }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: /^View fork family:/ }).count(), 0);
   // Queue shortcuts navigate directly without selecting a row or opening details.
   await app.evaluate(({ shell }) => {
     globalThis.monitorOpened = [];
@@ -825,6 +826,10 @@ try {
     return groups;
   });
   await afterArchiveRestart.getByRole('button', { name: /^Queue / }).click();
+  const standaloneRow = afterArchiveRestart
+    .getByTestId('group-row')
+    .filter({ hasText: 'Standalone task' });
+  assert.equal(await standaloneRow.getByRole('button', { name: /^View fork family:/ }).count(), 0);
   await afterArchiveRestart
     .getByRole('button', { name: 'View task: Standalone task', exact: true })
     .click();
@@ -837,10 +842,42 @@ try {
     .getByRole('navigation', { name: 'Task breadcrumbs' })
     .getByRole('button', { name: 'Queue', exact: true })
     .click();
+  // A group-row shortcut opens the attention-prioritized family immediately.
+  const performanceRow = afterArchiveRestart
+    .getByTestId('group-row')
+    .filter({ hasText: 'Performance' });
+  await performanceRow
+    .getByRole('button', { name: 'View fork family: Benchmark alternative', exact: true })
+    .click();
+  const shortcutView = afterArchiveRestart.getByRole('main', { name: 'Task view' });
+  await shortcutView.getByRole('heading', { name: 'Benchmark alternative', exact: true }).waitFor();
+  assert.equal(await shortcutView.getByTestId('fork-row').count(), 8);
+  assert.equal(
+    await shortcutView
+      .getByRole('button', { name: 'Fork family 8', exact: true })
+      .getAttribute('aria-pressed'),
+    'true',
+  );
+  await shortcutView
+    .getByRole('navigation', { name: 'Task breadcrumbs' })
+    .getByRole('button', { name: 'Queue', exact: true })
+    .click();
   await afterArchiveRestart
     .getByTestId('group-row')
     .filter({ hasText: 'Performance' })
     .locator('.row-select')
+    .click();
+  // A card has separate details and family actions; the family shortcut needs one click.
+  await afterArchiveRestart
+    .getByTestId('session-card')
+    .filter({ hasText: 'Try caching' })
+    .getByRole('button', { name: 'View fork family: Try caching', exact: true })
+    .click();
+  await shortcutView.getByRole('heading', { name: 'Try caching', exact: true }).waitFor();
+  assert.equal(await shortcutView.getByTestId('fork-row').count(), 8);
+  await shortcutView
+    .getByRole('navigation', { name: 'Task breadcrumbs' })
+    .getByRole('button', { name: 'Queue', exact: true })
     .click();
   await afterArchiveRestart
     .getByRole('button', { name: 'View task: Try caching', exact: true })
@@ -956,6 +993,15 @@ try {
   // The task view also opens from Library and Monitor's archive.
   await afterArchiveRestart.getByRole('button', { name: /^Archived / }).click();
   await afterArchiveRestart
+    .getByRole('button', { name: 'View fork family: Try bounded TTL', exact: true })
+    .click();
+  await taskView.getByRole('heading', { name: 'Try bounded TTL', exact: true }).waitFor();
+  assert.equal(await taskView.getByTestId('fork-row').count(), 8);
+  await taskView
+    .getByRole('navigation', { name: 'Task breadcrumbs' })
+    .getByRole('button', { name: 'Archived', exact: true })
+    .click();
+  await afterArchiveRestart
     .getByRole('button', { name: 'View task: Try bounded TTL · Experiments', exact: true })
     .click();
   await afterArchiveRestart
@@ -966,6 +1012,18 @@ try {
   await afterArchiveRestart
     .getByRole('textbox', { name: 'Filter workstreams' })
     .fill('Correctness');
+  const libraryShortcut = afterArchiveRestart.getByRole('button', {
+    name: 'View fork family: Reproduce stale reads',
+    exact: true,
+  });
+  await libraryShortcut.focus();
+  await libraryShortcut.press('Enter');
+  await taskView.getByRole('heading', { name: 'Reproduce stale reads', exact: true }).waitFor();
+  assert.equal(await taskView.getByTestId('fork-row').count(), 8);
+  await taskView
+    .getByRole('navigation', { name: 'Task breadcrumbs' })
+    .getByRole('button', { name: 'Library', exact: true })
+    .click();
   await afterArchiveRestart
     .getByRole('button', { name: 'View task: Reproduce stale reads · Correctness', exact: true })
     .click();
@@ -991,7 +1049,7 @@ try {
   assert.doesNotMatch(JSON.stringify(savedForks), /SYNTHETIC PRIVATE INSTRUCTIONS/);
   assert.deepEqual(errors, []);
   console.log(
-    'Electron smoke passed: details-first task rows, group task cards and sibling navigation, breadcrumbs, optional fork families, focus/collapse/expansion, missing parents, group reassignment and persistence, responsive layout, source metadata privacy, search, source archives, Library pagination, CLI actions, grouping, priority, and notifications. Screenshots include .runtime/task-details-smoke.png and .runtime/task-details-narrow-smoke.png.',
+    'Electron smoke passed: conditional one-click fork-family shortcuts on queue/library/archive rows and group cards, keyboard access, details-first task rows, sibling navigation, breadcrumbs, focus/collapse/expansion, missing parents, reassignment and persistence, responsive layout, source metadata privacy, search, source archives, Library pagination, CLI actions, grouping, priority, and notifications.',
   );
 } finally {
   await app?.close();

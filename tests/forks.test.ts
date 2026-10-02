@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyCommand, emptyState, isQueued, newGroup } from '../src/shared/queue';
-import { forkDescendants, forkFamily, forkPath, visibleForks } from '../src/shared/forks';
+import {
+  forkDescendants,
+  forkFamily,
+  forkPath,
+  forkRelatedIds,
+  visibleForks,
+} from '../src/shared/forks';
 import { commandSchema } from '../src/main/commands';
 import { session } from './helpers';
 
@@ -21,6 +27,31 @@ function fixture() {
   state.groups[3].snooze = { until: null };
   return state;
 }
+
+test('list shortcut eligibility agrees with the full graph, including unavailable parents and invalid relationships', () => {
+  const state = fixture();
+  const assertEligibility = () =>
+    assert.deepEqual(
+      forkRelatedIds(state),
+      new Set(
+        Object.keys(state.sessions).filter((id) => (forkFamily(state, id)?.nodes.size || 0) > 1),
+      ),
+    );
+  assertEligibility();
+  assert.equal(forkRelatedIds(state).has('codex:root00'), true);
+  assert.equal(forkRelatedIds(state).has('codex:other0'), false);
+  state.sessions['codex:root00'].archived = true;
+  assertEligibility();
+  assert.equal(forkRelatedIds(state).has('codex:root00'), false);
+  delete state.sessions['codex:root00'];
+  assertEligibility();
+  state.sessions['codex:other0'].lineage = { parentId: 'claude:root00' };
+  assertEligibility();
+  state.sessions['codex:other0'].lineage = { parentId: 'codex:other0' };
+  assertEligibility();
+  state.sessions['codex:child1'].lineage = { parentId: 'codex:nested' };
+  assertEligibility();
+});
 
 test('fork family spans groups, queue, library, snoozes, and Monitor archives in stable source order', () => {
   const state = fixture(),

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from 'react';
 import {
   displayStatus,
   isQueued,
@@ -17,7 +17,8 @@ import { ProviderIcon, RowProviders } from './ProviderIcon';
 import { displayDirectory } from './directory';
 import { createSearchMatcher } from './search';
 import { canResumeInTerminal, resumeCommand } from '../shared/resume';
-import { TaskView } from './TaskView';
+import { ForkIcon, TaskView } from './TaskView';
+import { forkRelatedIds } from '../shared/forks';
 
 type Editor =
   { kind: 'rename'; group: TaskGroup } | { kind: 'merge'; source: TaskGroup; target: TaskGroup };
@@ -58,7 +59,14 @@ function counts(state: MonitorState, sessions: Session[]) {
 export function App() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const [selectedTask, setSelectedTask] = useState<string | null>(null);
+  const [selectedTask, setSelectedTask] = useState<{
+    id: string;
+    initialSection: 'details' | 'family';
+  } | null>(null);
+  const relatedForks = useMemo(
+    () => (snapshot ? forkRelatedIds(snapshot.state) : new Set<string>()),
+    [snapshot?.state],
+  );
   const [editor, setEditor] = useState<Editor | null>(null);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -239,16 +247,25 @@ export function App() {
   }
   function openAction(group: TaskGroup) {
     const members = groupSessions(state, group);
-    const nextTask = members
-      .filter((session) => primary(session))
-      .sort(
-        (a, b) =>
-          statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status) ||
-          b.updatedAt - a.updatedAt,
-      )[0];
+    const byAttention = members.toSorted(
+      (a, b) =>
+        statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status) || b.updatedAt - a.updatedAt,
+    );
+    const nextTask = byAttention.find((session) => primary(session));
+    const familyTask = byAttention.find((session) => relatedForks.has(session.id));
     const destination = nextTask && primary(nextTask);
     return (
       <>
+        {familyTask && (
+          <button
+            className="open-row-action family-shortcut"
+            aria-label={`View fork family: ${familyTask.title}`}
+            title={`View fork family: ${familyTask.title}`}
+            onClick={() => viewTask(familyTask.id, 'family')}
+          >
+            <ForkIcon /> Fork family
+          </button>
+        )}
         {destination && (
           <button
             className="open-row-action"
@@ -275,11 +292,14 @@ export function App() {
       </>
     );
   }
+  function viewTask(id: string, initialSection: 'details' | 'family' = 'details') {
+    setSelectedTask({ id, initialSection });
+  }
   function selectRow(group: TaskGroup) {
     const members = groupSessions(state, group);
     if (members.length === 1) {
       setSelected(null);
-      setSelectedTask(members[0].id);
+      viewTask(members[0].id);
     } else setSelected(group.id);
   }
   function row(group: TaskGroup) {
@@ -461,11 +481,12 @@ export function App() {
       {selectedTask ? (
         <TaskView
           state={state}
-          sessionId={selectedTask}
+          sessionId={selectedTask.id}
+          initialSection={selectedTask.initialSection}
           homeDirectory={homeDirectory}
           backLabel={page === 'queue' ? 'Queue' : page === 'library' ? 'Library' : 'Archived'}
           back={() => setSelectedTask(null)}
-          select={setSelectedTask}
+          select={(id) => setSelectedTask({ ...selectedTask, id })}
           viewGroup={(group) => {
             setPage(group.archived ? 'archive' : isQueued(group) ? 'queue' : 'library');
             setSearch('');
@@ -681,7 +702,7 @@ export function App() {
                   <button
                     className="session-select"
                     aria-label={`View task: ${session.title}`}
-                    onClick={() => setSelectedTask(session.id)}
+                    onClick={() => viewTask(session.id)}
                   >
                     <span className="session-status">
                       <span className={`status-dot ${session.status}`} aria-hidden="true" />
@@ -704,6 +725,15 @@ export function App() {
                     </span>
                   </button>
                   <div className="session-actions">
+                    {relatedForks.has(session.id) && (
+                      <button
+                        className="quiet family-shortcut"
+                        aria-label={`View fork family: ${session.title}`}
+                        onClick={() => viewTask(session.id, 'family')}
+                      >
+                        <ForkIcon /> Fork family
+                      </button>
+                    )}
                     {primary(session) && (
                       <button onClick={() => void go(session)}>{primary(session)!.label} ↗</button>
                     )}
