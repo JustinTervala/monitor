@@ -864,14 +864,10 @@ h1 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  width: 30px;
+  height: 30px;
+  padding: 5px;
   color: var(--accent);
-  white-space: nowrap;
-}
-.open-row-action.family-shortcut {
-  width: auto;
-  padding: 5px 9px;
-  font-size: 11px;
 }
 .family-shortcut svg {
   flex-shrink: 0;
@@ -1222,6 +1218,9 @@ h1 {
 .session-actions button {
   font-size: 9px;
   padding: 5px 7px;
+}
+.session-actions .family-shortcut {
+  padding: 5px;
 }
 .error-banner {
   display: flex;

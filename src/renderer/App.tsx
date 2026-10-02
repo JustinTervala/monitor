@@ -263,7 +263,7 @@ export function App() {
             title={`View fork family: ${familyTask.title}`}
             onClick={() => viewTask(familyTask.id, 'family')}
           >
-            <ForkIcon /> Fork family
+            <ForkIcon />
           </button>
         )}
         {destination && (
@@ -729,9 +729,10 @@ export function App() {
                       <button
                         className="quiet family-shortcut"
                         aria-label={`View fork family: ${session.title}`}
+                        title={`View fork family: ${session.title}`}
                         onClick={() => viewTask(session.id, 'family')}
                       >
-                        <ForkIcon /> Fork family
+                        <ForkIcon />
                       </button>
                     )}
                     {primary(session) && (
