@@ -18,6 +18,9 @@ export interface Session {
   status: SessionStatus;
   detail: string;
   updatedAt: number;
+  createdAt?: number;
+  /** Source-owned ancestry. Missing means unavailable; null means no recorded parent. */
+  lineage?: { parentId: string | null };
   observedAt: number;
   evidence: 'live' | 'history' | 'unavailable';
   /** Stable result/request identity, not an observation timestamp. */
@@ -91,6 +94,7 @@ export type Command =
   | { type: 'archive'; groupId: string }
   | { type: 'restore'; groupId: string }
   | { type: 'detach'; groupId: string; sessionId: string }
+  | { type: 'assign'; sessionId: string; targetId: string }
   | { type: 'notifications'; enabled: boolean };
 
 export interface MonitorBridge {

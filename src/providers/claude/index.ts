@@ -14,6 +14,7 @@ import {
   type DesktopRecord,
 } from './catalog';
 import { sessionFromRecord, sessionFromTerminal } from './projection';
+import { LineageReader } from '../lineage';
 
 export interface ClaudeProviderOptions {
   /** Claude desktop's Code-tab session store. */
@@ -51,14 +52,15 @@ export class ClaudeProvider implements SessionProvider {
   private inFlight: Promise<void> | null = null;
   private again = false;
   private stopped = false;
+  private lineage = new LineageReader();
+  private configDir: string;
   constructor(private options: ClaudeProviderOptions = {}) {
     this.desktopDir =
       options.desktopDir ||
       join(homedir(), 'Library', 'Application Support', 'Claude', 'claude-code-sessions');
-    this.registryDir = join(
-      options.configDir || process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'),
-      'sessions',
-    );
+    this.configDir =
+      options.configDir || process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
+    this.registryDir = join(this.configDir, 'sessions');
     this.hooksDir =
       options.hooksDir ||
       process.env.MONITOR_CLAUDE_HOOKS_DIR ||
@@ -150,6 +152,38 @@ export class ClaudeProvider implements SessionProvider {
         sessions.push(sessionFromTerminal(id, hooks.get(id), live.terminal.get(id), now));
         terminals++;
       }
+    const desktopByCli = new Map(
+      records.filter((r) => r.cliSessionId).map((r) => [r.cliSessionId!, r]),
+    );
+    for (const session of sessions) {
+      const cliId = session.resumeId;
+      const desktop = cliId ? desktopByCli.get(cliId) : undefined;
+      if (!cliId || !session.directory || desktop?.forkedFromSessionId || desktop?.lineageDetached)
+        continue;
+      const project = session.directory.replace(/[^a-zA-Z0-9]/g, '-');
+      const meta = this.lineage.read(
+        join(this.configDir, 'projects', project, `${cliId}.jsonl`),
+        cliId,
+        (value) => {
+          if (!value || !['user', 'assistant'].includes(value.type)) return undefined;
+          if (value.sessionId !== cliId || value.isSidechain === true)
+            throw new Error('Unsupported session metadata');
+          const parent = value.forkedFrom?.sessionId ?? null;
+          if (
+            parent !== null &&
+            (typeof parent !== 'string' || !validCliSessionId(parent) || parent === cliId)
+          )
+            throw new Error('Invalid fork metadata');
+          return { parent };
+        },
+      );
+      if (meta)
+        session.lineage = {
+          parentId: meta.parent
+            ? `claude:${desktopByCli.get(meta.parent)?.sessionId || `cli_${meta.parent}`}`
+            : null,
+        };
+    }
     if (running || live.terminal.size) this.lastObservedAt = now;
     // Offline health first so the service drops its baseline before the
     // unavailable states; reconnect then re-baselines without replaying results.

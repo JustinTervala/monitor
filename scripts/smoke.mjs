@@ -65,12 +65,22 @@ const server = createServer((socket) => {
                 revision: 1,
                 conversationState: {
                   id,
-                  hasUnreadTurn: id === 'bbbbbb' || id === 'dddddd',
-                  threadRuntimeStatus: { type: id === 'aaaaaa' ? 'active' : 'idle' },
+                  hasUnreadTurn: [
+                    'bbbbbb',
+                    'dddddd',
+                    'fork-inval',
+                    'fork-ttl00',
+                    'fork-index',
+                  ].includes(id),
+                  threadRuntimeStatus: {
+                    type: ['aaaaaa', 'fork-stale', 'fork-bench'].includes(id) ? 'active' : 'idle',
+                  },
                   turns: [
                     {
                       turnId: `${id}-turn1`,
-                      status: id === 'aaaaaa' ? 'inProgress' : 'completed',
+                      status: ['aaaaaa', 'fork-stale', 'fork-bench'].includes(id)
+                        ? 'inProgress'
+                        : 'completed',
                       turnStartedAtMs: 1,
                     },
                   ],
@@ -687,8 +697,211 @@ try {
     .click();
   assert.equal(await afterArchiveRestart.getByTestId('session-card').count(), 2);
   assert.deepEqual(errors, []);
+
+  // Fork families cross organization boundaries. Exercise source metadata through
+  // the real adapters, group commands, task navigation, and restart persistence.
+  afterArchiveRestart.on('pageerror', (error) => errors.push(String(error)));
+  await app.evaluate(({ shell }) => {
+    globalThis.forkOpened = [];
+    shell.openExternal = async (url) => {
+      globalThis.forkOpened.push(url);
+    };
+  });
+  const forkTasks = [
+    ['fork-root0', 'Investigate latency', null],
+    ['fork-cache', 'Try caching', 'fork-root0'],
+    ['fork-inval', 'Investigate invalidation', 'fork-cache'],
+    ['fork-stale', 'Reproduce stale reads', 'fork-inval'],
+    ['fork-ttl00', 'Try bounded TTL', 'fork-inval'],
+    ['fork-bench', 'Benchmark alternative', 'fork-cache'],
+    ['fork-query', 'Explore query changes', 'fork-root0'],
+    ['fork-index', 'Test covering index', 'fork-query'],
+  ];
+  const forkDb = new DatabaseSync(join(home, 'state_5.sqlite'));
+  forkDb.exec(
+    'ALTER TABLE threads ADD COLUMN created_at INTEGER; ALTER TABLE threads ADD COLUMN rollout_path TEXT',
+  );
+  for (const [index, [id, title, parent]] of forkTasks.entries()) {
+    const path = join(home, `${id}.jsonl`);
+    writeFileSync(
+      path,
+      JSON.stringify({
+        type: 'session_meta',
+        payload: {
+          id,
+          forked_from_id: parent,
+          base_instructions: { text: 'SYNTHETIC PRIVATE INSTRUCTIONS' },
+        },
+      }) + '\n',
+    );
+    forkDb
+      .prepare(
+        "INSERT INTO threads(id,title,cwd,source,archived,updated_at,created_at,rollout_path) VALUES(?,?,?,'cli',0,?,?,?)",
+      )
+      .run(id, title, '/work/api-service', now, now - 3600 + index * 60, path);
+  }
+  forkDb.close();
+  await afterArchiveRestart.evaluate(() => window.monitor.refresh());
+  await afterArchiveRestart.waitForFunction(
+    async () =>
+      (await window.monitor.snapshot()).state.sessions['codex:fork-stale']?.status === 'running',
+  );
+  const forkGroups = await afterArchiveRestart.evaluate(async () => {
+    let snapshot = await window.monitor.snapshot();
+    const groupFor = (id) =>
+      snapshot.state.groups.find((g) => g.sessionIds.includes(`codex:${id}`)).id;
+    const groups = {
+      performance: groupFor('fork-root0'),
+      correctness: groupFor('fork-inval'),
+      experiments: groupFor('fork-ttl00'),
+      database: groupFor('fork-query'),
+    };
+    for (const [key, name] of [
+      ['performance', 'Performance'],
+      ['correctness', 'Correctness'],
+      ['experiments', 'Experiments'],
+      ['database', 'Database'],
+    ])
+      snapshot = await window.monitor.command({
+        type: 'rename',
+        groupId: groups[key],
+        name,
+        projectOverride: null,
+      });
+    for (const [id, target] of [
+      ['fork-cache', 'performance'],
+      ['fork-bench', 'performance'],
+      ['fork-stale', 'correctness'],
+      ['fork-index', 'database'],
+    ])
+      snapshot = await window.monitor.command({
+        type: 'assign',
+        sessionId: `codex:${id}`,
+        targetId: groups[target],
+      });
+    await window.monitor.command({ type: 'archive', groupId: groups.experiments });
+    return groups;
+  });
+  await afterArchiveRestart.getByRole('button', { name: /^Queue / }).click();
+  await afterArchiveRestart
+    .getByTestId('group-row')
+    .filter({ hasText: 'Performance' })
+    .locator('.row-select')
+    .click();
+  await afterArchiveRestart
+    .getByRole('button', { name: 'View task: Try caching', exact: true })
+    .click();
+  const taskView = afterArchiveRestart.getByRole('main', { name: 'Task view' });
+  await taskView.getByRole('heading', { name: 'Try caching', exact: true }).waitFor();
+  assert.equal(await taskView.getByTestId('fork-row').count(), 8);
+  await taskView.getByText('8 tasks across 4 groups', { exact: true }).waitFor();
+  await taskView.getByText('Experiments · Archived in Monitor', { exact: true }).waitFor();
+  const rowOrder = await taskView
+    .getByTestId('fork-row')
+    .evaluateAll((rows) => rows.map((row) => row.dataset.forkId));
+  await taskView
+    .getByRole('button', { name: 'View task: Investigate invalidation', exact: true })
+    .click();
+  assert.equal(
+    await taskView.getByLabel('Group', { exact: true }).inputValue(),
+    forkGroups.correctness,
+  );
+  assert.deepEqual(
+    await taskView
+      .getByTestId('fork-row')
+      .evaluateAll((rows) => rows.map((row) => row.dataset.forkId)),
+    rowOrder,
+  );
+  await taskView.getByRole('button', { name: 'Open in Codex ↗', exact: true }).click();
+  assert.deepEqual(await app.evaluate(() => globalThis.forkOpened), ['codex://threads/fork-inval']);
+  await taskView.getByRole('button', { name: 'Focus branch', exact: true }).click();
+  assert.equal(await taskView.getByTestId('fork-row').count(), 5);
+  await taskView
+    .getByRole('button', { name: 'Collapse forks of Investigate invalidation', exact: true })
+    .click();
+  assert.equal(await taskView.getByTestId('fork-row').count(), 3);
+  await taskView.getByText('2 hidden · 1 need review · 1 running', { exact: true }).waitFor();
+  await taskView.getByRole('button', { name: 'Expand all', exact: true }).click();
+  await taskView.getByRole('button', { name: 'Focus branch', exact: true }).click();
+  await taskView.getByRole('button', { name: '↗ Expand view', exact: true }).click();
+  assert.equal(await taskView.getByRole('complementary', { name: 'Task details' }).count(), 0);
+  await taskView.getByRole('button', { name: '↙ Show details', exact: true }).click();
+  await taskView.getByRole('button', { name: 'Try caching ↗', exact: true }).click();
+  await taskView.getByRole('heading', { name: 'Try caching', exact: true }).waitFor();
+  await taskView.getByRole('button', { name: 'Investigate invalidation ↗', exact: true }).click();
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1120, 960));
+  await afterArchiveRestart.screenshot({ path: '.runtime/fork-task-smoke.png' });
+  const beforeAssignment = (await afterArchiveRestart.evaluate(() => window.monitor.snapshot()))
+    .state;
+  await taskView.getByLabel('Group', { exact: true }).selectOption(forkGroups.performance);
+  await taskView
+    .getByRole('status')
+    .getByText('Moved to Performance. Fork ancestry is preserved.', { exact: true })
+    .waitFor();
+  const afterAssignment = (await afterArchiveRestart.evaluate(() => window.monitor.snapshot()))
+    .state;
+  assert.deepEqual(
+    afterAssignment.groups.map((g) => g.id),
+    beforeAssignment.groups.map((g) => g.id),
+  );
+  assert.deepEqual(afterAssignment.sessions['codex:fork-inval'].lineage, {
+    parentId: 'codex:fork-cache',
+  });
+  assert.deepEqual(afterAssignment.groups.find((g) => g.id === forkGroups.correctness).sessionIds, [
+    'codex:fork-stale',
+  ]);
+  assert.equal(await taskView.getByTestId('fork-row').count(), 8);
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(780, 900));
+  assert.equal(
+    await taskView.evaluate((element) => element.scrollWidth <= element.clientWidth),
+    true,
+  );
+  await afterArchiveRestart.screenshot({ path: '.runtime/fork-task-narrow-smoke.png' });
+  archiveInCodex(['fork-root0'], true);
+  await afterArchiveRestart.evaluate(() => window.monitor.refresh());
+  await taskView.getByText('Parent task unavailable', { exact: true }).waitFor();
+  assert.equal(await taskView.getByText('Investigate latency', { exact: true }).count(), 0);
+  archiveInCodex(['fork-root0'], false);
+  await afterArchiveRestart.evaluate(() => window.monitor.refresh());
+  // The task view also opens from Library and Monitor's archive.
+  await afterArchiveRestart.getByRole('button', { name: /^Archived / }).click();
+  await afterArchiveRestart
+    .getByRole('button', { name: 'View task: Try bounded TTL', exact: true })
+    .click();
+  await afterArchiveRestart
+    .getByRole('main', { name: 'Task view' })
+    .getByRole('heading', { name: 'Try bounded TTL', exact: true })
+    .waitFor();
+  await afterArchiveRestart.getByRole('button', { name: /^Library / }).click();
+  await afterArchiveRestart
+    .getByRole('textbox', { name: 'Filter workstreams' })
+    .fill('Correctness');
+  await afterArchiveRestart
+    .getByRole('button', { name: 'View task: Reproduce stale reads', exact: true })
+    .click();
+  await afterArchiveRestart
+    .getByRole('main', { name: 'Task view' })
+    .getByRole('heading', { name: 'Reproduce stale reads', exact: true })
+    .waitFor();
+  await app.close();
+  app = undefined;
+  app = await electron.launch({ args: ['.'], env });
+  const afterForkRestart = await app.firstWindow();
+  await afterForkRestart.getByRole('heading', { name: 'Your queue.' }).waitFor();
+  const savedForks = (await afterForkRestart.evaluate(() => window.monitor.snapshot())).state;
+  assert.ok(
+    savedForks.groups
+      .find((g) => g.id === forkGroups.performance)
+      .sessionIds.includes('codex:fork-inval'),
+  );
+  assert.equal(savedForks.groups.find((g) => g.id === forkGroups.experiments).archived, true);
+  assert.deepEqual(savedForks.sessions['codex:fork-inval'].lineage, {
+    parentId: 'codex:fork-cache',
+  });
+  assert.doesNotMatch(JSON.stringify(savedForks), /SYNTHETIC PRIVATE INSTRUCTIONS/);
+  assert.deepEqual(errors, []);
   console.log(
-    'Electron smoke passed: typo-tolerant search across all pages, saved search order, Codex source archives hidden across views and restart, unarchive restores organization, Library backlog, pagination, promotion, expanded Read, last-known placement, CLI desktop-first navigation, show/resume iTerm actions, one-click and keyboard navigation, group attention/recency selection, discovery, grouping, editing, snoozing, priority, Monitor archive, source immutability and persistence. Screenshots: .runtime/smoke.png, .runtime/archive-smoke.png and .runtime/cli-smoke.png',
+    'Electron smoke passed: task views and fork families across groups, focus/collapse/expansion, missing parents, group reassignment and persistence, responsive layout, source metadata privacy, search, source archives, Library pagination, CLI actions, grouping, priority, and notifications. Screenshots: .runtime/fork-task-smoke.png, .runtime/fork-task-narrow-smoke.png, .runtime/smoke.png, .runtime/archive-smoke.png and .runtime/cli-smoke.png',
   );
 } finally {
   await app?.close();

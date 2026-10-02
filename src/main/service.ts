@@ -54,12 +54,14 @@ export class MonitorService extends EventEmitter {
     const state = structuredClone(this.state);
     for (const [id, session] of Object.entries(state.sessions))
       if (isHiddenSession(session)) delete state.sessions[id];
-    state.groups = state.groups
-      .map((group) => ({
+    state.groups = state.groups.flatMap((group) => {
+      const emptyNamed = !group.sessionIds.length && (group.name || group.projectOverride);
+      const visible = {
         ...group,
         sessionIds: groupSessions(state, group).map((session) => session.id),
-      }))
-      .filter((group) => group.sessionIds.length > 0);
+      };
+      return visible.sessionIds.length || emptyNamed ? [visible] : [];
+    });
     return {
       homeDirectory: homedir(),
       state,

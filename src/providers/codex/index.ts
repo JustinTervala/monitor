@@ -10,6 +10,7 @@ import {
 } from '../terminal';
 import { readCatalog, validThreadId } from './catalog';
 import { CodexTransport } from './transport';
+import { LineageReader } from '../lineage';
 import { defaultHooksDirectory, readHookRecords, sessionFromHooks, type HookRecord } from './hooks';
 import {
   projectConversation,
@@ -36,6 +37,7 @@ export class CodexProvider implements SessionProvider {
   private terminalProcesses: Map<number, TerminalProcess> | null = new Map();
   private terminalOwners = new Map<number, string>();
   private refreshPromise: Promise<void> | null = null;
+  private lineage = new LineageReader();
   constructor(
     readonly home = process.env.CODEX_HOME || join(homedir(), '.codex'),
     readonly hooksDirectory = defaultHooksDirectory(),
@@ -175,7 +177,7 @@ export class CodexProvider implements SessionProvider {
       )) {
         if (record.terminal) this.terminalOwners.set(record.terminal.pid, id);
       }
-      const rows = readCatalog(this.home, this.tracked);
+      const rows = readCatalog(this.home, this.tracked, this.lineage);
       for (const row of rows) {
         const live = this.live.get(row.externalId);
         this.sessions.set(

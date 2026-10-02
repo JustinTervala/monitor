@@ -70,6 +70,8 @@ Monitor uses the Midnight theme: dark blue surfaces and periwinkle accents. Stat
 - Drag a row onto another row to group them. An existing named group accepts the task immediately and keeps its name; combining unnamed tasks asks for a group name. One group occupies one row.
 - Drag the **⠿ handle** to reorder. The **Priority** view shows the global order across sections; arrow buttons in details provide keyboard-accessible ordering.
 - **Edit group** changes its name or project tag. **Detach** splits out a member. Use group snoozing to put a workstream aside.
+- **Task view** opens from the fork icon on a single-task row, or a task title in group details. Its fork family includes ancestors, siblings, and descendants across groups, Library, and Monitor archives. Select another task without rearranging the tree; use **Focus branch**, branch chevrons, or **Expand view** for larger families. Collapsed branches show hidden review/running counts. The details pane opens the source app, links to parents and direct forks, and moves an individual task between groups without changing ancestry. The destination group's snooze/archive policy applies.
+- Fork relationships come from local source metadata. Missing or source-hidden parents appear as an unavailable parent; unavailable ancestry is labeled, never guessed from titles or directories. Codex source-archived tasks remain hidden. Creation times order sibling branches, independently of activity and queue priority. Exact conversation fork points are not shown.
 - Names, membership, snoozes, archives, and saved priority survive upgrades. On upgrading an existing installation, older unnamed singletons move into Library; named/grouped workstreams, custom projects, and snoozes stay organized. New tasks append to the saved order, including when initially placed in Library.
 - Snooze the whole workstream for an hour, until tomorrow at 9 AM local time, or until restored. Members keep executing and notifications pause.
 - **Archive workstream** moves the whole group to the separate **Archived** page. Browse collapsible projects with workstreams sorted by their latest task activity, or search by name, task, or directory. Archiving is local to Monitor; Codex and Claude stay unchanged.
@@ -98,7 +100,7 @@ For Claude, Monitor reads the desktop's Code-session records and the Claude Code
 
 The desktop observer protocol is **internal**, tested against desktop `26.903.61454`, stream version `11`. It may change with app updates. Supported companion observations fill gaps; otherwise unsupported or disconnected state becomes **Status unavailable**, never an invented completion. A catalog entry alone is insufficient to know whether a task is running; open it in Codex if no desktop window currently supplies live state.
 
-Codex's socket sends conversation snapshots. The adapter immediately reduces them to metadata, runtime state, and result/request identities. Prompts, responses, and tool payloads are not persisted or sent to the renderer. Monitor's own state lives in its Electron user-data directory in `monitor.sqlite`.
+Codex's socket sends conversation snapshots. The adapter immediately reduces them to metadata, runtime state, and result/request identities. Fork readers also inspect a bounded local session-file prefix, retaining only parent identifiers. Prompts, responses, and tool payloads are not persisted or sent to the renderer. Monitor's own state lives in its Electron user-data directory in `monitor.sqlite`.
 
 ## Development
 

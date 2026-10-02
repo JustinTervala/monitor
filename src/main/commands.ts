@@ -37,5 +37,6 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('archive'), groupId: id }).strict(),
   z.object({ type: z.literal('restore'), groupId: id }).strict(),
   z.object({ type: z.literal('detach'), groupId: id, sessionId: id }).strict(),
+  z.object({ type: z.literal('assign'), sessionId: id, targetId: id }).strict(),
   z.object({ type: z.literal('notifications'), enabled: z.boolean() }).strict(),
 ]);

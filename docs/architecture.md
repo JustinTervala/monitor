@@ -14,6 +14,8 @@ Claude desktop records    → ClaudeProvider ┘       │
 
 - `src/shared/types.ts`: provider-owned Session, user-owned TaskGroup, Snapshot, and command contracts.
 - `src/shared/queue.ts`: pure group precedence, project tags, membership, and ordering operations.
+- `src/shared/forks.ts`: stable source-ancestry families, missing-parent placeholders, cycle handling, and iterative branch traversal independent of groups.
+- `src/providers/lineage.ts`: bounded source-prefix reader that caches only reduced parent identifiers.
 - `src/providers/provider.ts`: provider contract for observation, tracking, health, and session navigation.
 - `src/providers/codex/`: catalog reader, framed IPC transport, transcript-free projection, ordered patch reconciliation, and supported companion observations when desktop state is unavailable.
 - `src/providers/claude/`: desktop Code-session record reader, Claude Code process registry, focus-based acknowledgment projection.
@@ -21,6 +23,7 @@ Claude desktop records    → ClaudeProvider ┘       │
 - `src/main/store.ts`: Monitor's SQLite storage. A single versioned JSON document is updated transactionally; a relational schema can follow when query volume warrants it.
 - `src/main/main.ts`: window/menu-bar lifecycle, native notifications, validated navigation and IPC.
 - `src/renderer/`: grouped queue, priority view, project/recency Library and archive, detail pane, and editors.
+- `src/renderer/TaskView.tsx`: cross-group task navigation, fork tree, branch focus/collapse, expanded view, and individual task assignment.
 
 ## Authority and persistence
 
@@ -35,6 +38,10 @@ The service's renderer snapshot excludes source-archived Codex sessions and thei
 The one-time version-1 to version-2 data upgrade keeps all groups, sessions, names, membership, priority, snoozes, archives, and notification receipts. Older unnamed singletons enter Library. Named/grouped workstreams, custom projects, and snoozes retain queue membership. Version 2 persists each task's first observation, latest actual activity timestamp, and qualified last-known status separately from provider-owned sessions.
 
 A merge inherits the higher position and retains the drop target's identity, project override, and snooze policy. Detaching creates a singleton immediately after the source group; it stays archived if its parent was archived. Archived groups must be restored before merging, reordering, or snoozing.
+
+Assigning a task moves only that member into the selected group. The destination keeps its priority, snooze, queue, and archive settings. Source peers retain their settings. Empty unnamed singletons are removed; emptied named/custom-project groups retain their saved metadata and remain available in Library and the group picker. Empty groups do not occupy the attention queue. Source ancestry is provider-owned and unaffected by every grouping operation. `Session.lineage` is optional: absence means unavailable, `parentId: null` means no source parent recorded, and a parent ID is namespaced to its provider. No database reset or state-version migration is required.
+
+The fork graph spans all visible tasks, including Monitor archives. Source-hidden or missing parents receive anonymous placeholders that can still connect sibling forks; their names/statuses are not exposed. Siblings sort by source creation time then ID, never status, title, or last activity. Cycles are cut deterministically and flagged. Iterative traversal handles deep chains without recursive stack overflow. Deep rows beyond eight lanes show their level, with explicit parent navigation in details. Runtime states retain the same unavailable/last-known qualification as the queue.
 
 Monitor stores no transcript bodies. On launch, cached session states become unavailable until corroborated by the provider. The separate last-known observation preserves placement and is labeled as historical; it never overwrites the provider status or creates a completion. Groups, order, and snoozes survive restarts. Source files are read-only during observation. Companion hooks also write private metadata records; only the explicit installer updates Codex integration settings.
 

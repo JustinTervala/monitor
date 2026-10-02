@@ -179,7 +179,7 @@ export function LibraryPage({
                         {activityDate(updatedAt)}
                       </time>
                     </button>
-                    {mode === 'library' && openAction(group)}
+                    {openAction(group)}
                     {!queued && (
                       <button
                         className="quiet restore-row"

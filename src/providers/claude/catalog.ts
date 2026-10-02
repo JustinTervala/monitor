@@ -21,6 +21,8 @@ export interface DesktopRecord {
   lastAssistantUuid: string | null;
   /** Successful turns; incremented once per turn, unlike the per-message uuid. */
   completedTurns: number;
+  forkedFromSessionId?: string | null;
+  lineageDetached?: boolean;
   errorAt: number | null;
 }
 
@@ -86,6 +88,13 @@ export function readDesktopRecords(root: string): DesktopRecord[] {
         Number.isSafeInteger(raw.completedTurns) && (raw.completedTurns as number) > 0
           ? (raw.completedTurns as number)
           : 0,
+      forkedFromSessionId:
+        typeof raw.forkedFromSessionId === 'string' &&
+        validSessionId(raw.forkedFromSessionId) &&
+        raw.forkedFromSessionId !== sessionId
+          ? raw.forkedFromSessionId
+          : null,
+      lineageDetached: raw.lineageDetached === true,
       errorAt: raw.error !== undefined && raw.error !== null ? time(raw.errorAt) : null,
     };
     const old = byId.get(sessionId);

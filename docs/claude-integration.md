@@ -15,6 +15,12 @@ Compatibility was inspected on macOS with Claude desktop `2.16120.0` (bundle `co
 
 The desktop store lives in `~/Library/Application Support/Claude/`. The adapter enumerates every record in it without a count limit. The store is a directory, so there is no pagination.
 
+## Fork ancestry
+
+Desktop records expose `forkedFromSessionId`; `lineageDetached` clears the displayed parent relationship. Agent-spawn and suggested-task links are not treated as user forks. For CLI forks and desktop sessions resumed from CLI, the adapter reads up to 1 MiB of the session-file prefix under the configured `projects/<encoded-cwd>/<session-id>.jsonl`. It reduces the first matching user/assistant record to `forkedFrom.sessionId`, validates the current/parent IDs, and discards message content. Parent CLI IDs map to a known desktop session when available, so a family can cross surfaces without creating duplicate tasks. This observes already-discovered sessions; it does not import all historical CLI transcripts.
+
+The cache keeps only parent IDs and file identity/size. Missing files, oversized prefixes, or invalid metadata leave CLI ancestry unavailable. Fork-point message bodies and identifiers are not persisted or shown. Desktop field semantics and CLI serialization were inspected in the installed source-app bundles; automated tests use synthetic fixtures, including cross-surface ancestry and detachment. No live Claude fork was created during validation. Restart Monitor after installing the updated build; no hook reinstall or source-app restart is needed for ancestry.
+
 ## Hooks plugin (terminal sessions)
 
 Terminal sessions have no persisted state that Monitor can read, apart from the live process registry. The optional **`monitor-hooks`** plugin (`plugins/monitor-hooks/`) fills that gap with documented Claude Code [hooks](https://code.claude.com/docs/en/hooks). Installing it is the user's choice; Monitor never edits Claude settings itself.

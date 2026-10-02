@@ -14,6 +14,12 @@ Use `CODEX_HOME` or `~/.codex`. Open the highest `state_N.sqlite` read-only with
 
 A catalog timestamp is not runtime evidence. Catalog-only tasks remain unavailable.
 
+## Fork ancestry
+
+The catalog also reads source creation timestamps and the first `session_meta` record from the catalog's rollout path. `forked_from_id`, or `history_base.thread_id` for shared history, supplies the parent; `parent_thread_id` is deliberately excluded because it describes spawned agents. The reader checks the metadata identity, validates the parent ID, bounds reads to 1 MiB, and caches only the reduced parent identifier for an immutable file prefix. Unreadable, partial, oversized, or invalid metadata leaves ancestry unavailable. Prompts, instructions, tool definitions, and transcript bodies are discarded and never persisted. No app-server process is started, task resumed, or source file modified. Exact fork turns are not inferred from creation timestamps or history ordinals.
+
+A read-only check against the installed source catalog confirmed that existing shared-history forks resolve through `history_base.thread_id`. Synthetic fixtures cover both metadata forms, partial writes, replacement, invalid IDs, source immutability, and content exclusion; they do not prove every historical Codex fork format can be recovered.
+
 ## Desktop transport
 
 Connect to `ipc/ipc.sock` only when it and its parent directory belong to the current OS user and the directory is not writable by other users. Messages are UTF-8 JSON framed by a four-byte unsigned little-endian length. The adapter caps frames at 64 MiB and reconnects with bounded exponential backoff.

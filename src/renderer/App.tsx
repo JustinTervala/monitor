@@ -17,6 +17,7 @@ import { ProviderIcon, RowProviders } from './ProviderIcon';
 import { displayDirectory } from './directory';
 import { createSearchMatcher } from './search';
 import { canResumeInTerminal, resumeCommand } from '../shared/resume';
+import { ForkIcon, TaskView } from './TaskView';
 
 type Editor =
   { kind: 'rename'; group: TaskGroup } | { kind: 'merge'; source: TaskGroup; target: TaskGroup };
@@ -57,6 +58,7 @@ function counts(state: MonitorState, sessions: Session[]) {
 export function App() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [selectedTask, setSelectedTask] = useState<string | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -175,6 +177,7 @@ export function App() {
   const codex = health.find((h) => h.provider === 'codex');
   function navigate(next: 'queue' | 'library' | 'archive') {
     setPage(next);
+    setSelectedTask(null);
     setSelected(null);
     setSearch('');
     setDrag(null);
@@ -235,7 +238,9 @@ export function App() {
     setDrop(null);
   }
   function openAction(group: TaskGroup) {
-    const nextTask = groupSessions(state, group)
+    const members = groupSessions(state, group);
+    const single = members.length === 1 ? members[0] : null;
+    const nextTask = members
       .filter((session) => primary(session))
       .sort(
         (a, b) =>
@@ -244,29 +249,41 @@ export function App() {
       )[0];
     const destination = nextTask && primary(nextTask);
     return (
-      destination && (
-        <button
-          className="open-row-action"
-          data-testid="open-task"
-          aria-label={`${destination.label}: ${nextTask.title}`}
-          title={`${destination.label}: ${nextTask.title}`}
-          onClick={() => void go(nextTask)}
-        >
-          <svg
-            width="17"
-            height="17"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
+      <>
+        {single && (
+          <button
+            className="open-row-action task-row-action"
+            aria-label={`View task: ${single.title}`}
+            title="View task and fork family"
+            onClick={() => setSelectedTask(single.id)}
           >
-            <path d="M14 3h7v7M21 3L11 13M10 3H3v18h18v-7" />
-          </svg>
-        </button>
-      )
+            <ForkIcon />
+          </button>
+        )}
+        {destination && (
+          <button
+            className="open-row-action"
+            data-testid="open-task"
+            aria-label={`${destination.label}: ${nextTask.title}`}
+            title={`${destination.label}: ${nextTask.title}`}
+            onClick={() => void go(nextTask)}
+          >
+            <svg
+              width="17"
+              height="17"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M14 3h7v7M21 3L11 13M10 3H3v18h18v-7" />
+            </svg>
+          </button>
+        )}
+      </>
     );
   }
   function row(group: TaskGroup) {
@@ -367,7 +384,9 @@ export function App() {
             <ArchiveIcon /> Archived <span>{archivedCount}</span>
           </button>
         </nav>
-        {page === 'queue' ? (
+        {selectedTask ? (
+          <p>Task view</p>
+        ) : page === 'queue' ? (
           <p>
             {reviewCount} need review
             <span className="separator">·</span>
@@ -381,46 +400,51 @@ export function App() {
           </p>
         )}
       </header>
-      <div className="toolbar">
-        <label className="search">
-          <span>⌕</span>
-          <input
-            aria-label="Filter workstreams"
-            placeholder={
-              page === 'queue'
-                ? 'Find a workstream…'
-                : page === 'library'
-                  ? 'Search all tasks…'
-                  : 'Search the archive…'
-            }
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </label>
-        {page === 'queue' ? (
-          <div className="view-toggle" aria-label="Queue view">
-            <button
-              className={!priorityView ? 'active' : ''}
-              onClick={() => setPriorityView(false)}
-            >
-              By state
-            </button>
-            <button className={priorityView ? 'active' : ''} onClick={() => setPriorityView(true)}>
-              Priority
-            </button>
-          </div>
-        ) : (
-          <span className="archive-sort">Project · Recent activity</span>
-        )}
-        <button
-          className={`quiet notification-toggle ${state.notifications ? '' : 'muted'}`}
-          title="Monitor completion notifications"
-          aria-pressed={state.notifications}
-          onClick={() => void command({ type: 'notifications', enabled: !state.notifications })}
-        >
-          {state.notifications ? '◉ Notifications on' : '○ Notifications off'}
-        </button>
-      </div>
+      {!selectedTask && (
+        <div className="toolbar">
+          <label className="search">
+            <span>⌕</span>
+            <input
+              aria-label="Filter workstreams"
+              placeholder={
+                page === 'queue'
+                  ? 'Find a workstream…'
+                  : page === 'library'
+                    ? 'Search all tasks…'
+                    : 'Search the archive…'
+              }
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </label>
+          {page === 'queue' ? (
+            <div className="view-toggle" aria-label="Queue view">
+              <button
+                className={!priorityView ? 'active' : ''}
+                onClick={() => setPriorityView(false)}
+              >
+                By state
+              </button>
+              <button
+                className={priorityView ? 'active' : ''}
+                onClick={() => setPriorityView(true)}
+              >
+                Priority
+              </button>
+            </div>
+          ) : (
+            <span className="archive-sort">Project · Recent activity</span>
+          )}
+          <button
+            className={`quiet notification-toggle ${state.notifications ? '' : 'muted'}`}
+            title="Monitor completion notifications"
+            aria-pressed={state.notifications}
+            onClick={() => void command({ type: 'notifications', enabled: !state.notifications })}
+          >
+            {state.notifications ? '◉ Notifications on' : '○ Notifications off'}
+          </button>
+        </div>
+      )}
       {error && (
         <div role="alert" className="error-banner">
           <span>{error}</span>
@@ -429,306 +453,356 @@ export function App() {
           </button>
         </div>
       )}
-      <div className={`workspace ${selectedGroup ? 'with-details' : ''}`}>
-        {page !== 'queue' ? (
-          <LibraryPage
-            homeDirectory={homeDirectory}
-            key={page}
-            mode={page}
-            openAction={openAction}
-            state={state}
-            search={search}
-            matches={matches}
-            selected={selected}
-            select={setSelected}
-            restore={(group) => void restore(group)}
-          />
-        ) : (
-          <main className="queue">
-            {priorityView ? (
-              <section className="queue-section">
-                <div className="section-heading">
-                  <h2>Global priority</h2>
-                  <span>{activeGroups.length}</span>
-                </div>
-                {activeGroups.filter(matches).map(row)}
-              </section>
-            ) : (
-              sectionOrder.map((section) => {
-                const groups = activeGroups.filter(
-                  (g) => groupSection(state, g) === section && matches(g),
-                );
-                if (!groups.length && section !== 'review' && section !== 'running') return null;
-                const expanded = section !== 'read' || readExpanded || Boolean(search.trim());
-                return (
-                  <section
-                    className={`queue-section section-${section}`}
-                    key={section}
-                    aria-label={section === 'unknown' ? undefined : sectionLabels[section]}
-                  >
-                    {section !== 'unknown' && (
-                      <div className="section-heading">
-                        <span className={`status-dot ${section}`} aria-hidden="true" />
-                        <h2>
-                          {section === 'read' ? (
-                            <button
-                              className="section-toggle"
-                              aria-expanded={expanded}
-                              aria-controls="read-workstreams"
-                              onClick={() => setReadExpanded((value) => !value)}
-                            >
-                              <svg
-                                className="section-chevron"
-                                width="12"
-                                height="12"
-                                viewBox="0 0 12 12"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.5"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                aria-hidden="true"
-                                focusable="false"
-                              >
-                                <path d="M4.5 3 7.5 6 4.5 9" />
-                              </svg>
-                              Read
-                            </button>
-                          ) : (
-                            sectionLabels[section]
-                          )}
-                        </h2>
-                        <span>{groups.length}</span>
-                      </div>
-                    )}
-                    <div
-                      id={section === 'read' ? 'read-workstreams' : undefined}
-                      hidden={!expanded}
+      {selectedTask ? (
+        <TaskView
+          state={state}
+          sessionId={selectedTask}
+          homeDirectory={homeDirectory}
+          backLabel={page === 'queue' ? 'Queue' : page === 'library' ? 'Library' : 'Archived'}
+          back={() => setSelectedTask(null)}
+          select={setSelectedTask}
+          viewGroup={(group) => {
+            setPage(group.archived ? 'archive' : isQueued(group) ? 'queue' : 'library');
+            setSearch('');
+            setSelected(group.id);
+            setSelectedTask(null);
+            setReadExpanded(true);
+          }}
+          assign={(sessionId, targetId) => command({ type: 'assign', sessionId, targetId })}
+          detach={(groupId, sessionId) => command({ type: 'detach', groupId, sessionId })}
+          open={(session) => void go(session)}
+          primaryLabel={(session) => primary(session)?.label || null}
+          actions={(session) => (
+            <>
+              {session.openable !== false && session.terminalPid && (
+                <button
+                  onClick={() => void attempt(() => window.monitor.showInTerminal(session.id))}
+                >
+                  Show in iTerm
+                </button>
+              )}
+              {session.openable !== false && canResumeInTerminal(session) && (
+                <button
+                  onClick={() => void attempt(() => window.monitor.resumeInTerminal(session.id))}
+                >
+                  Resume in iTerm
+                </button>
+              )}
+              {resumeCommand(session) && (
+                <button onClick={() => void copyResume(session)}>
+                  {copied === session.id ? 'Copied ✓' : 'Copy resume command'}
+                </button>
+              )}
+            </>
+          )}
+        />
+      ) : (
+        <div className={`workspace ${selectedGroup ? 'with-details' : ''}`}>
+          {page !== 'queue' ? (
+            <LibraryPage
+              homeDirectory={homeDirectory}
+              key={page}
+              mode={page}
+              openAction={openAction}
+              state={state}
+              search={search}
+              matches={matches}
+              selected={selected}
+              select={setSelected}
+              restore={(group) => void restore(group)}
+            />
+          ) : (
+            <main className="queue">
+              {priorityView ? (
+                <section className="queue-section">
+                  <div className="section-heading">
+                    <h2>Global priority</h2>
+                    <span>{activeGroups.length}</span>
+                  </div>
+                  {activeGroups.filter(matches).map(row)}
+                </section>
+              ) : (
+                sectionOrder.map((section) => {
+                  const groups = activeGroups.filter(
+                    (g) => groupSection(state, g) === section && matches(g),
+                  );
+                  if (!groups.length && section !== 'review' && section !== 'running') return null;
+                  const expanded = section !== 'read' || readExpanded || Boolean(search.trim());
+                  return (
+                    <section
+                      className={`queue-section section-${section}`}
+                      key={section}
+                      aria-label={section === 'unknown' ? undefined : sectionLabels[section]}
                     >
-                      {groups.length ? (
-                        groups.map(row)
-                      ) : (
-                        <div className="empty-section">
-                          {search
-                            ? 'No matching workstreams'
-                            : section === 'review'
-                              ? 'Nothing waiting for your attention.'
-                              : 'No workstreams running right now.'}
+                      {section !== 'unknown' && (
+                        <div className="section-heading">
+                          <span className={`status-dot ${section}`} aria-hidden="true" />
+                          <h2>
+                            {section === 'read' ? (
+                              <button
+                                className="section-toggle"
+                                aria-expanded={expanded}
+                                aria-controls="read-workstreams"
+                                onClick={() => setReadExpanded((value) => !value)}
+                              >
+                                <svg
+                                  className="section-chevron"
+                                  width="12"
+                                  height="12"
+                                  viewBox="0 0 12 12"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="1.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  aria-hidden="true"
+                                  focusable="false"
+                                >
+                                  <path d="M4.5 3 7.5 6 4.5 9" />
+                                </svg>
+                                Read
+                              </button>
+                            ) : (
+                              sectionLabels[section]
+                            )}
+                          </h2>
+                          <span>{groups.length}</span>
                         </div>
                       )}
-                    </div>
-                  </section>
-                );
-              })
-            )}
-            {!activeGroups.length && (
-              <div className="empty-queue">
-                <h2>
-                  {state.groups.length
-                    ? 'Your queue is clear.'
-                    : 'Your tasks appear automatically.'}
-                </h2>
-                <p>
-                  {state.groups.length
-                    ? 'Find older work in Library, or start a new task in Codex or Claude.'
-                    : 'Open Codex and start a task. It will appear here on the next refresh.'}
-                </p>
-              </div>
-            )}
-          </main>
-        )}
-        {selectedGroup && (
-          <aside className="details" aria-label="Workstream details">
-            <div className="detail-top">
-              <span className="eyebrow">
-                {selectedGroup.archived
-                  ? 'ARCHIVED WORKSTREAM'
-                  : isQueued(selectedGroup)
-                    ? `WORKSTREAM · #${selectedIndex + 1}`
-                    : 'LIBRARY WORKSTREAM'}
-              </span>
-              <button
-                className="icon-button"
-                aria-label="Close details"
-                onClick={() => setSelected(null)}
-              >
-                ×
-              </button>
-            </div>
-            <h2>{groupName(state, selectedGroup)}</h2>
-            <span className="project-tag">{projectTag(state, selectedGroup)}</span>
-            <div className="detail-actions">
-              <button onClick={() => setEditor({ kind: 'rename', group: selectedGroup })}>
-                Edit group
-              </button>
-              {isQueued(selectedGroup) && (
-                <>
-                  <button
-                    title="Increase global priority"
-                    aria-label="Increase priority"
-                    disabled={activeIndex === 0}
-                    onClick={() =>
-                      void command({
-                        type: 'move',
-                        groupId: selectedGroup.id,
-                        targetId: activeGroups[activeIndex - 1].id,
-                        placement: 'before',
-                      })
-                    }
-                  >
-                    ↑
-                  </button>
-                  <button
-                    title="Decrease global priority"
-                    aria-label="Decrease priority"
-                    disabled={activeIndex === activeGroups.length - 1}
-                    onClick={() =>
-                      void command({
-                        type: 'move',
-                        groupId: selectedGroup.id,
-                        targetId: activeGroups[activeIndex + 1].id,
-                        placement: 'after',
-                      })
-                    }
-                  >
-                    ↓
-                  </button>
-                </>
+                      <div
+                        id={section === 'read' ? 'read-workstreams' : undefined}
+                        hidden={!expanded}
+                      >
+                        {groups.length ? (
+                          groups.map(row)
+                        ) : (
+                          <div className="empty-section">
+                            {search
+                              ? 'No matching workstreams'
+                              : section === 'review'
+                                ? 'Nothing waiting for your attention.'
+                                : 'No workstreams running right now.'}
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  );
+                })
               )}
-            </div>
-            <div className="member-heading">
-              <h3>Tasks</h3>
-              <span>{selectedGroup.sessionIds.length}</span>
-            </div>
-            {groupSessions(state, selectedGroup).map((session) => (
-              <div className="session-card" key={session.id} data-testid="session-card">
-                <div className="session-status">
-                  <span className={`status-dot ${session.status}`} aria-hidden="true" />
-                  {session.status === 'unknown' && displayStatus(state, session) !== 'unknown'
-                    ? `Last seen ${statusLabel[displayStatus(state, session)].toLowerCase()}`
-                    : statusLabel[session.status]}
-                  <span className="provider-name">
-                    <ProviderIcon provider={session.provider} />
-                    {session.provider}
-                  </span>
+              {!activeGroups.length && (
+                <div className="empty-queue">
+                  <h2>
+                    {state.groups.length
+                      ? 'Your queue is clear.'
+                      : 'Your tasks appear automatically.'}
+                  </h2>
+                  <p>
+                    {state.groups.length
+                      ? 'Find older work in Library, or start a new task in Codex or Claude.'
+                      : 'Open Codex and start a task. It will appear here on the next refresh.'}
+                  </p>
                 </div>
-                {primary(session) ? (
-                  <button className="session-link" onClick={() => void go(session)}>
-                    {session.title}
-                    <span aria-hidden>↗</span>
-                  </button>
-                ) : (
-                  <span className="session-link">{session.title}</span>
-                )}
-                <p>{session.detail}</p>
-                <code title={session.directory || ''}>
-                  {displayDirectory(session.directory, homeDirectory) ||
-                    'Source directory unavailable'}
-                </code>
-                <div className="session-actions">
-                  {primary(session) && (
-                    <button onClick={() => void go(session)}>{primary(session)!.label} ↗</button>
-                  )}
-                  {session.openable !== false && session.terminalPid && (
+              )}
+            </main>
+          )}
+          {selectedGroup && (
+            <aside className="details" aria-label="Workstream details">
+              <div className="detail-top">
+                <span className="eyebrow">
+                  {selectedGroup.archived
+                    ? 'ARCHIVED WORKSTREAM'
+                    : isQueued(selectedGroup)
+                      ? `WORKSTREAM · #${selectedIndex + 1}`
+                      : 'LIBRARY WORKSTREAM'}
+                </span>
+                <button
+                  className="icon-button"
+                  aria-label="Close details"
+                  onClick={() => setSelected(null)}
+                >
+                  ×
+                </button>
+              </div>
+              <h2>{groupName(state, selectedGroup)}</h2>
+              <span className="project-tag">{projectTag(state, selectedGroup)}</span>
+              <div className="detail-actions">
+                <button onClick={() => setEditor({ kind: 'rename', group: selectedGroup })}>
+                  Edit group
+                </button>
+                {isQueued(selectedGroup) && (
+                  <>
                     <button
-                      className="quiet"
-                      onClick={() => void attempt(() => window.monitor.showInTerminal(session.id))}
-                    >
-                      Show in iTerm
-                    </button>
-                  )}
-                  {session.openable !== false && canResumeInTerminal(session) && (
-                    <button
-                      className="quiet"
-                      onClick={() =>
-                        void attempt(() => window.monitor.resumeInTerminal(session.id))
-                      }
-                    >
-                      Resume in iTerm
-                    </button>
-                  )}
-                  {resumeCommand(session) && (
-                    <button
-                      className="quiet"
-                      title={`${resumeCommand(session)}\nResume after the task has stopped in its current app or terminal.`}
-                      onClick={() => void copyResume(session)}
-                    >
-                      {copied === session.id ? 'Copied ✓' : 'Copy resume command'}
-                    </button>
-                  )}
-                  {selectedGroup.sessionIds.length > 1 && (
-                    <button
-                      className="quiet"
+                      title="Increase global priority"
+                      aria-label="Increase priority"
+                      disabled={activeIndex === 0}
                       onClick={() =>
                         void command({
-                          type: 'detach',
+                          type: 'move',
                           groupId: selectedGroup.id,
-                          sessionId: session.id,
+                          targetId: activeGroups[activeIndex - 1].id,
+                          placement: 'before',
                         })
                       }
                     >
-                      Detach
+                      ↑
+                    </button>
+                    <button
+                      title="Decrease global priority"
+                      aria-label="Decrease priority"
+                      disabled={activeIndex === activeGroups.length - 1}
+                      onClick={() =>
+                        void command({
+                          type: 'move',
+                          groupId: selectedGroup.id,
+                          targetId: activeGroups[activeIndex + 1].id,
+                          placement: 'after',
+                        })
+                      }
+                    >
+                      ↓
+                    </button>
+                  </>
+                )}
+              </div>
+              <div className="member-heading">
+                <h3>Tasks</h3>
+                <span>{selectedGroup.sessionIds.length}</span>
+              </div>
+              {groupSessions(state, selectedGroup).map((session) => (
+                <div className="session-card" key={session.id} data-testid="session-card">
+                  <div className="session-status">
+                    <span className={`status-dot ${session.status}`} aria-hidden="true" />
+                    {session.status === 'unknown' && displayStatus(state, session) !== 'unknown'
+                      ? `Last seen ${statusLabel[displayStatus(state, session)].toLowerCase()}`
+                      : statusLabel[session.status]}
+                    <span className="provider-name">
+                      <ProviderIcon provider={session.provider} />
+                      {session.provider}
+                    </span>
+                  </div>
+                  <button
+                    className="session-link"
+                    aria-label={`View task: ${session.title}`}
+                    onClick={() => setSelectedTask(session.id)}
+                  >
+                    {session.title}
+                    <ForkIcon />
+                  </button>
+                  <p>{session.detail}</p>
+                  <code title={session.directory || ''}>
+                    {displayDirectory(session.directory, homeDirectory) ||
+                      'Source directory unavailable'}
+                  </code>
+                  <div className="session-actions">
+                    {primary(session) && (
+                      <button onClick={() => void go(session)}>{primary(session)!.label} ↗</button>
+                    )}
+                    {session.openable !== false && session.terminalPid && (
+                      <button
+                        className="quiet"
+                        onClick={() =>
+                          void attempt(() => window.monitor.showInTerminal(session.id))
+                        }
+                      >
+                        Show in iTerm
+                      </button>
+                    )}
+                    {session.openable !== false && canResumeInTerminal(session) && (
+                      <button
+                        className="quiet"
+                        onClick={() =>
+                          void attempt(() => window.monitor.resumeInTerminal(session.id))
+                        }
+                      >
+                        Resume in iTerm
+                      </button>
+                    )}
+                    {resumeCommand(session) && (
+                      <button
+                        className="quiet"
+                        title={`${resumeCommand(session)}\nResume after the task has stopped in its current app or terminal.`}
+                        onClick={() => void copyResume(session)}
+                      >
+                        {copied === session.id ? 'Copied ✓' : 'Copy resume command'}
+                      </button>
+                    )}
+                    {selectedGroup.sessionIds.length > 1 && (
+                      <button
+                        className="quiet"
+                        onClick={() =>
+                          void command({
+                            type: 'detach',
+                            groupId: selectedGroup.id,
+                            sessionId: session.id,
+                          })
+                        }
+                      >
+                        Detach
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {!isQueued(selectedGroup) ? (
+                <div className="archive-control">
+                  <button className="primary" onClick={() => void restore(selectedGroup, true)}>
+                    {selectedGroup.archived ? 'Restore to queue' : 'Add to queue'}
+                  </button>
+                  {!selectedGroup.archived && (
+                    <button
+                      className="archive-workstream"
+                      onClick={() => void archive(selectedGroup)}
+                    >
+                      <ArchiveIcon /> Archive workstream
                     </button>
                   )}
                 </div>
-              </div>
-            ))}
-            {!isQueued(selectedGroup) ? (
-              <div className="archive-control">
-                <button className="primary" onClick={() => void restore(selectedGroup, true)}>
-                  {selectedGroup.archived ? 'Restore to queue' : 'Add to queue'}
-                </button>
-                {!selectedGroup.archived && (
+              ) : (
+                <>
+                  <div className="snooze-control">
+                    <label htmlFor="group-snooze">Defer this workstream</label>
+                    <select
+                      id="group-snooze"
+                      aria-label="Snooze workstream"
+                      value={isSnoozed(selectedGroup) ? 'current' : 'active'}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value === 'active')
+                          void command({ type: 'unsnooze', groupId: selectedGroup.id });
+                        else if (value !== 'current')
+                          void command({
+                            type: 'snooze',
+                            groupId: selectedGroup.id,
+                            until:
+                              value === 'hour'
+                                ? Date.now() + 3600000
+                                : value === 'tomorrow'
+                                  ? tomorrow()
+                                  : null,
+                          });
+                      }}
+                    >
+                      <option value="active">Active</option>
+                      {isSnoozed(selectedGroup) && (
+                        <option value="current">{snoozeLabel(selectedGroup)}</option>
+                      )}
+                      <option value="hour">Snooze for 1 hour</option>
+                      <option value="tomorrow">Tomorrow at 9 AM</option>
+                      <option value="manual">Until I restore it</option>
+                    </select>
+                  </div>
                   <button
                     className="archive-workstream"
                     onClick={() => void archive(selectedGroup)}
                   >
                     <ArchiveIcon /> Archive workstream
                   </button>
-                )}
-              </div>
-            ) : (
-              <>
-                <div className="snooze-control">
-                  <label htmlFor="group-snooze">Defer this workstream</label>
-                  <select
-                    id="group-snooze"
-                    aria-label="Snooze workstream"
-                    value={isSnoozed(selectedGroup) ? 'current' : 'active'}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === 'active')
-                        void command({ type: 'unsnooze', groupId: selectedGroup.id });
-                      else if (value !== 'current')
-                        void command({
-                          type: 'snooze',
-                          groupId: selectedGroup.id,
-                          until:
-                            value === 'hour'
-                              ? Date.now() + 3600000
-                              : value === 'tomorrow'
-                                ? tomorrow()
-                                : null,
-                        });
-                    }}
-                  >
-                    <option value="active">Active</option>
-                    {isSnoozed(selectedGroup) && (
-                      <option value="current">{snoozeLabel(selectedGroup)}</option>
-                    )}
-                    <option value="hour">Snooze for 1 hour</option>
-                    <option value="tomorrow">Tomorrow at 9 AM</option>
-                    <option value="manual">Until I restore it</option>
-                  </select>
-                </div>
-                <button className="archive-workstream" onClick={() => void archive(selectedGroup)}>
-                  <ArchiveIcon /> Archive workstream
-                </button>
-              </>
-            )}
-          </aside>
-        )}
-      </div>
+                </>
+              )}
+            </aside>
+          )}
+        </div>
+      )}
       <footer>
         <div className="connection" title={codex?.message}>
           <span

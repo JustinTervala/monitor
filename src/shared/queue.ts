@@ -25,7 +25,8 @@ export const emptyState = (): MonitorState => ({
   observations: {},
 });
 export const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-export const isQueued = (group: TaskGroup) => group.inQueue && !group.archived;
+export const isQueued = (group: TaskGroup) =>
+  group.inQueue && !group.archived && group.sessionIds.length > 0;
 export const isCurrentlyActive = (session: Session) =>
   session.evidence === 'live' && (session.status === 'running' || session.awaitingInput === true);
 export const initiallyQueued = (session: Session, now = Date.now()) =>
@@ -205,6 +206,21 @@ export function applyCommand(
     case 'notifications':
       next.notifications = command.enabled;
       break;
+    case 'assign': {
+      const session = next.sessions[command.sessionId];
+      if (!session || isHiddenSession(session)) throw new Error('This task is unavailable.');
+      const target = find(command.targetId);
+      const source = next.groups.find((g) => g.sessionIds.includes(command.sessionId));
+      if (!source) throw new Error('This task no longer belongs to a group.');
+      if (source === target) return state;
+      // Move just this task; both groups keep their scheduling and organization.
+      source.sessionIds = source.sessionIds.filter((id) => id !== command.sessionId);
+      target.sessionIds.push(command.sessionId);
+      // Retain empty named groups in storage so their settings are not discarded.
+      if (!source.sessionIds.length && !source.name && !source.projectOverride)
+        next.groups = next.groups.filter((g) => g !== source);
+      break;
+    }
   }
   return next;
 }

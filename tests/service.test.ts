@@ -36,6 +36,41 @@ class FakeProvider implements SessionProvider {
   }
 }
 
+test('moving the last member keeps a named group available for reassignment without exposing source-hidden groups', async (t) => {
+  const path = mkdtempSync(join(tmpdir(), 'monitor-empty-group-'));
+  const provider = new FakeProvider();
+  const service = new MonitorService(
+    new MonitorStore(join(path, 'state.sqlite')),
+    [provider],
+    () => {},
+  );
+  t.after(() => {
+    service.stop();
+    rmSync(path, { recursive: true });
+  });
+  await service.start();
+  provider.emit(session('aaaaaa'), session('bbbbbb'));
+  const [a, b] = service.snapshot().state.groups;
+  service.command({
+    type: 'rename',
+    groupId: a.id,
+    name: 'Keep this group',
+    projectOverride: 'My project',
+  });
+  service.command({ type: 'assign', sessionId: a.sessionIds[0], targetId: b.id });
+  const empty = service.snapshot().state.groups.find((g) => g.id === a.id)!;
+  assert.equal(empty.name, 'Keep this group');
+  assert.equal(empty.projectOverride, 'My project');
+  assert.deepEqual(empty.sessionIds, []);
+  service.command({ type: 'assign', sessionId: a.sessionIds[0], targetId: a.id });
+  assert.deepEqual(
+    service.snapshot().state.groups.find((g) => g.id === a.id)?.sessionIds,
+    a.sessionIds,
+  );
+  provider.emit(session('aaaaaa', { archived: true }));
+  assert.ok(!service.snapshot().state.groups.some((g) => g.id === a.id));
+});
+
 test('terminal resume refreshes source state and refuses a live task', async (t) => {
   const path = mkdtempSync(join(tmpdir(), 'monitor-resume-'));
   const provider = new FakeProvider();

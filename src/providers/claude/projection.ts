@@ -14,6 +14,13 @@ export function sessionFromRecord(
     externalId: record.sessionId,
     title: record.title || (record.cwd && basename(record.cwd)) || 'Untitled Claude task',
     directory: record.cwd,
+    createdAt: record.createdAt ?? undefined,
+    lineage: {
+      parentId:
+        !record.lineageDetached && record.forkedFromSessionId
+          ? `claude:${record.forkedFromSessionId}`
+          : null,
+    },
     updatedAt: record.lastActivityAt ?? record.createdAt ?? 0,
     activityAt: record.lastActivityAt ?? undefined,
     observedAt: now,
