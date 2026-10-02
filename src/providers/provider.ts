@@ -14,5 +14,7 @@ export interface SessionProvider {
   refresh(): Promise<void>;
   /** Return a validated navigation URL. Never send a prompt or resume execution. */
   sessionUrl(externalId: string): string;
+  /** Lazy, transient final-response read for this exact completion. Never cache the response. */
+  readCompletedResponse?(session: Session): Promise<string | null>;
   stop(): void;
 }

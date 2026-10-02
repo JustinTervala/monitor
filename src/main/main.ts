@@ -18,6 +18,7 @@ import { commandSchema } from './commands';
 import { resumeInITerm, showInITerm } from './iterm';
 import { CodexProvider } from '../providers/codex';
 import { ClaudeProvider } from '../providers/claude';
+import { summarizeWithLuna } from './summaries/luna';
 
 app.setName('Monitor');
 nativeTheme.themeSource = 'dark';
@@ -68,6 +69,7 @@ async function openSession(id: string) {
   )
     throw new Error('Unsupported Claude session destination.');
   await shell.openExternal(url);
+  service?.opened(id);
 }
 async function showWindow() {
   if (window && !window.isDestroyed()) {
@@ -141,7 +143,9 @@ if (gotLock)
               : pid
                 ? (() => {
                     const terminal = service!.terminalTarget(event.sessionId);
-                    return showInITerm(terminal.pid, terminal.provider, terminal.identity);
+                    return showInITerm(terminal.pid, terminal.provider, terminal.identity).then(
+                      () => service!.opened(event.sessionId),
+                    );
                   })()
                 : showWindow();
             void target.catch((error) =>
@@ -151,6 +155,12 @@ if (gotLock)
           notification.on('close', () => notifications.delete(notification));
           notification.on('failed', () => notifications.delete(notification));
           notification.show();
+        },
+        {
+          run: summarizeWithLuna,
+          ...(!app.isPackaged && process.env.MONITOR_SUMMARY_DELAY_MS
+            ? { delayMs: Math.max(1, Number(process.env.MONITOR_SUMMARY_DELAY_MS) || 300_000) }
+            : {}),
         },
       );
       ipcMain.handle('monitor:snapshot', (event) => {
@@ -183,10 +193,12 @@ if (gotLock)
         await service!.refresh();
         const terminal = service!.terminalTarget(sessionId(id));
         await showInITerm(terminal.pid, terminal.provider, terminal.identity);
+        service!.opened(id);
       });
       ipcMain.handle('monitor:resume-terminal', async (event, id) => {
         validateSender(event);
         await resumeInITerm(await service!.terminalResumeCommand(sessionId(id)));
+        service!.opened(id);
       });
       ipcMain.handle('monitor:refresh', async (event) => {
         validateSender(event);
@@ -245,10 +257,13 @@ app.on('activate', () => {
 app.on('window-all-closed', () => {
   /* The observer remains active until Quit. */
 });
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
+  if (quitting) return;
+  event.preventDefault();
   quitting = true;
-  service?.stop();
+  const stopped = service?.stop() ?? Promise.resolve();
   service = null;
   tray?.destroy();
   tray = null;
+  void stopped.finally(() => app.quit());
 });

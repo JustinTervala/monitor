@@ -62,6 +62,8 @@ export interface MonitorState {
   groups: TaskGroup[];
   notifications: boolean;
   notificationKeys: Record<string, string>;
+  /** Latest derived handoff only. Source responses and summary jobs are never persisted. */
+  summaries: Record<string, { completionKey: string; activityAt: number; text: string }>;
   observations: Record<
     string,
     {

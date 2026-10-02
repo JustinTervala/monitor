@@ -9,7 +9,7 @@ Monitor is a personal app for one person, Justin. There are no other users to su
 - Work directly on `main` and push completed changes. Do not create pull requests or a review workflow for this project.
 - During iteration, commit and push without bumping the app version or creating a GitHub release for each push. Create a release and choose its version only when Justin asks. Local builds and installs can use the current version; refresh a plugin cachebuster when needed for Codex to pick up changed plugin code.
 - Keep the existing Codex and Claude harnesses. Session status belongs to the source app; grouping, ordering, snoozing, and local archiving belong to Monitor.
-- Keep integrations local. Never persist prompts, responses, tool arguments, credentials, or raw hook payloads. Use synthetic fixtures in tests.
+- Keep integrations local. Never persist raw prompts, responses, tool arguments, credentials, or hook payloads. The only content cache is the most recent derived handoff summary per chat; archiving deletes it. Read final responses lazily and transiently, and use ephemeral Luna jobs without saving their chats. Use synthetic fixtures in tests.
 - Use the Midnight palette with prominent blue accents. Status colors must not rely on red versus green; retain text labels and distinct marker shapes, and preserve readable contrast on dark and selected surfaces.
 
 Run `npm run check` for implementation changes and `npm run smoke` when desktop integration or UI behavior changes. Use Node 24 or newer. Keep validation claims specific about fixture tests versus live source-app observations.

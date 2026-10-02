@@ -94,9 +94,24 @@ const server = createServer((socket) => {
   });
 });
 await new Promise((resolve) => server.listen(join(home, 'ipc', 'ipc.sock'), resolve));
+const summaryCli = join(root, 'fake-codex');
+writeFileSync(
+  summaryCli,
+  `#!${process.execPath}
+let input=''; process.stdin.on('data',chunk=>input+=chunk); process.stdin.on('end',()=>{
+  const response=JSON.parse(input).response;
+  if(response!=='SYNTHETIC FINAL: choose one of three auth options.')process.exit(2);
+  console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:JSON.stringify({summary:'Needs a decision on 3 auth options.'})}}));
+  console.log(JSON.stringify({type:'turn.completed'}));
+});
+`,
+  { mode: 0o700 },
+);
 const env = {
   ...process.env,
   CODEX_HOME: home,
+  MONITOR_CODEX_EXECUTABLE: summaryCli,
+  MONITOR_SUMMARY_DELAY_MS: '300',
   MONITOR_CODEX_HOOKS_DIR: join(root, 'codex-hooks'),
   MONITOR_DATA_DIR: join(root, 'monitor'),
   // Isolate from the real Claude desktop store; Claude is covered by its adapter tests.
@@ -1139,9 +1154,141 @@ try {
     parentId: 'codex:fork-cache',
   });
   assert.doesNotMatch(JSON.stringify(savedForks), /SYNTHETIC PRIVATE INSTRUCTIONS/);
+  // A fresh completion exercises the production reader, ephemeral CLI runner,
+  // cache, rendered queue/task/group summaries, and archive deletion together.
+  assert.deepEqual(savedForks.summaries, {}); // Hundreds of discovered fixtures did not backfill.
+  const summaryPath = join(root, 'summary-rollout.jsonl');
+  writeFileSync(
+    summaryPath,
+    [
+      { type: 'session_meta', payload: { id: 'sum-fresh' } },
+      {
+        type: 'event_msg',
+        payload: {
+          type: 'task_complete',
+          turn_id: 'sum-turn2',
+          last_agent_message: 'SYNTHETIC FINAL: choose one of three auth options.',
+        },
+      },
+    ]
+      .map((value) => JSON.stringify(value))
+      .join('\n') + '\n',
+  );
+  const summaryCatalog = new DatabaseSync(join(home, 'state_5.sqlite'));
+  summaryCatalog
+    .prepare(
+      "INSERT INTO threads(id,title,cwd,source,archived,updated_at,rollout_path) VALUES(?,?,?,'cli',0,?,?)",
+    )
+    .run(
+      'sum-fresh',
+      'Choose auth policy',
+      '/work/auth',
+      Math.floor(Date.now() / 1000),
+      summaryPath,
+    );
+  summaryCatalog.close();
+  await afterForkRestart.evaluate(() => window.monitor.refresh());
+  await afterForkRestart.waitForFunction(
+    async () =>
+      (await window.monitor.snapshot()).state.sessions['codex:sum-fresh']?.attentionKey ===
+      'result:sum-fresh-turn1',
+  );
+  const summaryEvent = (revision, status, turn = 'sum-turn2') => {
+    for (const client of clients)
+      client.write(
+        frame({
+          type: 'broadcast',
+          method: 'thread-stream-state-changed',
+          version: 11,
+          sourceClientId: 'fixture',
+          params: {
+            hostId: 'local',
+            conversationId: 'sum-fresh',
+            change: {
+              type: 'snapshot',
+              revision,
+              conversationState: {
+                id: 'sum-fresh',
+                hasUnreadTurn: status !== 'running',
+                threadRuntimeStatus: { type: status === 'running' ? 'active' : 'idle' },
+                turns: [
+                  {
+                    turnId: turn,
+                    status: status === 'running' ? 'inProgress' : 'completed',
+                    turnStartedAtMs: Date.now(),
+                  },
+                ],
+              },
+            },
+          },
+        }),
+      );
+  };
+  summaryEvent(2, 'running');
+  await afterForkRestart.waitForFunction(
+    async () =>
+      (await window.monitor.snapshot()).state.sessions['codex:sum-fresh'].status === 'running',
+  );
+  summaryEvent(3, 'review');
+  const summaryRow = afterForkRestart
+    .getByTestId('group-row')
+    .filter({ hasText: 'Choose auth policy' });
+  await summaryRow
+    .getByTestId('handoff-summary')
+    .getByText('Needs a decision on 3 auth options.')
+    .waitFor();
+  await summaryRow
+    .getByRole('button', { name: 'View task: Choose auth policy', exact: true })
+    .click();
+  await afterForkRestart
+    .getByRole('main', { name: 'Task view' })
+    .getByTestId('handoff-summary')
+    .getByText('Needs a decision on 3 auth options.')
+    .waitFor();
+  await afterForkRestart.screenshot({ path: '.runtime/luna-handoff-task.png' });
+  await afterForkRestart
+    .getByRole('navigation', { name: 'Task breadcrumbs' })
+    .getByRole('button', { name: 'Queue', exact: true })
+    .click();
+  const summaryState = (await afterForkRestart.evaluate(() => window.monitor.snapshot())).state;
+  assert.doesNotMatch(JSON.stringify(summaryState), /SYNTHETIC FINAL/);
+  const summaryGroup = summaryState.groups.find((g) => g.sessionIds.includes('codex:sum-fresh'));
+  await afterForkRestart.evaluate(
+    async (targetId) =>
+      window.monitor.command({ type: 'assign', sessionId: 'codex:fork-stale', targetId }),
+    summaryGroup.id,
+  );
+  await summaryRow.getByText('2', { exact: true }).waitFor();
+  await summaryRow.locator('button.row-select').click();
+  await afterForkRestart
+    .getByTestId('session-card')
+    .filter({ hasText: 'Choose auth policy' })
+    .getByTestId('handoff-summary')
+    .getByText('Needs a decision on 3 auth options.')
+    .waitFor();
+  await afterForkRestart.screenshot({ path: '.runtime/luna-handoff-group.png' });
+  await afterForkRestart.getByRole('button', { name: 'Close details', exact: true }).click();
+  await afterForkRestart.screenshot({ path: '.runtime/luna-handoff.png' });
+  await afterForkRestart.evaluate(
+    async (groupId) => window.monitor.command({ type: 'archive', groupId }),
+    summaryGroup.id,
+  );
+  assert.deepEqual(
+    (await afterForkRestart.evaluate(() => window.monitor.snapshot())).state.summaries,
+    {},
+  );
+  await afterForkRestart.evaluate(
+    async (groupId) => window.monitor.command({ type: 'restore', groupId }),
+    summaryGroup.id,
+  );
+  await afterForkRestart.waitForTimeout(500);
+  assert.deepEqual(
+    (await afterForkRestart.evaluate(() => window.monitor.snapshot())).state.summaries,
+    {},
+  );
   assert.deepEqual(errors, []);
   console.log(
-    'Electron smoke passed: static task group names, recent/search group picker, cancel/focus return, keyboard reassignment and persistence, conditional fork-family shortcuts, details-first navigation, sibling tasks, breadcrumbs, focus/collapse/expansion, missing parents, responsive layout, source metadata privacy, search, source archives, Library pagination, CLI actions, grouping, priority, and notifications.',
+    'Electron smoke passed: lazy handoff summaries, exact final-response reads, ephemeral Luna runner, cache privacy, archive deletion without replay, static task group names, recent/search group picker, cancel/focus return, keyboard reassignment and persistence, conditional fork-family shortcuts, details-first navigation, sibling tasks, breadcrumbs, focus/collapse/expansion, missing parents, responsive layout, source metadata privacy, search, source archives, Library pagination, CLI actions, grouping, priority, and notifications.',
   );
 } finally {
   await app?.close();

@@ -22,6 +22,7 @@ export const emptyState = (): MonitorState => ({
   groups: [],
   notifications: true,
   notificationKeys: {},
+  summaries: {},
   observations: {},
 });
 export const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;

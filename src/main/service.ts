@@ -15,6 +15,7 @@ import type { Command, MonitorState, ProviderHealth, Session, Snapshot } from '.
 import type { SessionProvider } from '../providers/provider';
 import { MonitorStore } from './store';
 import { canResumeInTerminal, resumeCommand } from '../shared/resume';
+import { SummaryQueue, type SummaryOptions } from './summaries/queue';
 
 export interface NotificationEvent {
   title: string;
@@ -28,13 +29,29 @@ export class MonitorService extends EventEmitter {
   private persistTimer: NodeJS.Timeout | null = null;
   private publishTimer: NodeJS.Timeout | null = null;
   private wakeTimer: NodeJS.Timeout | null = null;
+  private summaries: SummaryQueue | null = null;
   constructor(
     private store: MonitorStore,
     private providers: SessionProvider[],
     private notify: (event: NotificationEvent) => void,
+    summaryOptions?: SummaryOptions,
   ) {
     super();
     this.state = store.read();
+    if (summaryOptions) {
+      this.summaries = new SummaryQueue(
+        () => this.state,
+        (session) =>
+          this.providers.find((p) => p.id === session.provider)?.readCompletedResponse?.(session) ??
+          Promise.resolve(null),
+        summaryOptions,
+        () => {
+          this.persistSoon();
+          this.publish();
+        },
+      );
+      this.summaries.reconcile();
+    }
     for (const session of Object.values(this.state.sessions)) {
       const observation = (this.state.observations[session.id] ??= {
         firstSeenAt: session.observedAt || Date.now(),
@@ -128,6 +145,7 @@ export class MonitorService extends EventEmitter {
       if (old && JSON.stringify(oldValue) === JSON.stringify(newValue)) continue;
       changed = true;
       this.state.sessions[session.id] = session;
+      this.summaries?.observe(session, !this.baselined.has(session.id));
       if (session.status !== 'unknown' && session.evidence !== 'unavailable')
         observation.lastKnown = { status: session.status, observedAt: session.observedAt };
       if (session.evidence === 'unavailable') continue;
@@ -164,6 +182,7 @@ export class MonitorService extends EventEmitter {
       }
     }
     if (trackingChanged) this.updateTracking();
+    this.summaries?.reconcile();
     if (changed) {
       this.persistSoon();
       this.publish();
@@ -171,6 +190,7 @@ export class MonitorService extends EventEmitter {
   }
   command(command: Command): Snapshot {
     this.state = applyCommand(this.state, command);
+    this.summaries?.reconcile();
     this.store.write(this.state);
     this.updateTracking();
     this.scheduleWake();
@@ -192,6 +212,9 @@ export class MonitorService extends EventEmitter {
     const provider = this.providers.find((p) => p.id === session?.provider);
     if (!session || !provider) throw new Error('This session provider is not available.');
     return provider.sessionUrl(session.externalId);
+  }
+  opened(id: string) {
+    this.summaries?.opened(id);
   }
   canOpen(id: string): boolean {
     return this.state.sessions[id]?.openable !== false;
@@ -258,6 +281,7 @@ export class MonitorService extends EventEmitter {
     );
   }
   stop() {
+    const stopped = this.summaries?.stop() ?? Promise.resolve();
     for (const provider of this.providers) provider.stop();
     if (this.persistTimer) clearTimeout(this.persistTimer);
     if (this.publishTimer) clearTimeout(this.publishTimer);
@@ -265,5 +289,6 @@ export class MonitorService extends EventEmitter {
     this.store.write(this.state);
     this.store.close();
     this.removeAllListeners();
+    return stopped;
   }
 }

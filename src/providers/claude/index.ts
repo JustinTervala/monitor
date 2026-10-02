@@ -15,6 +15,7 @@ import {
 } from './catalog';
 import { sessionFromRecord, sessionFromTerminal } from './projection';
 import { LineageReader } from '../lineage';
+import { readClaudeResponse } from './response';
 
 export interface ClaudeProviderOptions {
   /** Claude desktop's Code-tab session store. */
@@ -39,6 +40,9 @@ export function claudeDesktopRunning(): Promise<boolean> {
 
 export class ClaudeProvider implements SessionProvider {
   readonly id = 'claude' as const;
+  readCompletedResponse(session: Session) {
+    return readClaudeResponse(this.desktopDir, this.configDir, this.hooksDir, session);
+  }
   readonly desktopDir: string;
   readonly registryDir: string;
   readonly hooksDir: string;

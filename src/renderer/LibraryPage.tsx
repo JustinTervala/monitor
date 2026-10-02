@@ -10,6 +10,7 @@ import {
 import type { MonitorState, TaskGroup } from '../shared/types';
 import { RowProviders } from './ProviderIcon';
 import { displayDirectory } from './directory';
+import { HandoffSummary } from './HandoffSummary';
 
 export function ArchiveIcon() {
   return (
@@ -170,6 +171,9 @@ export function LibraryPage({
                       <RowProviders providers={sessions.map((session) => session.provider)} />
                       <span className="row-name">
                         {name}
+                        {sessions.length === 1 && (
+                          <HandoffSummary state={state} session={sessions[0]} />
+                        )}
                         <span className="row-meta">
                           {mode === 'library' &&
                             `${group.archived ? 'Archived' : queued ? 'In queue' : 'In library'} · `}

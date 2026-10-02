@@ -11,6 +11,7 @@ import { displayStatus, groupName, isQueued, isSnoozed } from '../shared/queue';
 import type { MonitorState, Session, TaskGroup } from '../shared/types';
 import { displayDirectory } from './directory';
 import { GroupPicker } from './GroupPicker';
+import { HandoffSummary } from './HandoffSummary';
 import { ProviderIcon } from './ProviderIcon';
 
 const labels = {
@@ -193,6 +194,7 @@ export function TaskView({
                 {age(session.updatedAt)}
               </span>
             </div>
+            <HandoffSummary state={state} session={session} />
           </div>
           {label && (
             <button className="primary" onClick={() => open(session)}>
@@ -317,6 +319,7 @@ export function TaskView({
                       >
                         <span className="fork-title">
                           <strong>{task.title}</strong>
+                          <HandoffSummary state={state} session={task} />
                           <span className="fork-meta">
                             {taskGroup ? groupName(state, taskGroup) : 'No group'}
                             {taskGroup &&
@@ -498,6 +501,7 @@ export function TaskView({
                 onClick={() => choose(member.id)}
               >
                 <strong>{member.title}</strong>
+                <HandoffSummary state={state} session={member} />
                 <span>
                   <span className={`status-dot ${member.status}`} aria-hidden="true" />
                   {stateLabel(state, member)}

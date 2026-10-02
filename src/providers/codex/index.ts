@@ -11,6 +11,7 @@ import {
 import { readCatalog, validThreadId } from './catalog';
 import { CodexTransport } from './transport';
 import { LineageReader } from '../lineage';
+import { readCodexResponse } from './response';
 import { defaultHooksDirectory, readHookRecords, sessionFromHooks, type HookRecord } from './hooks';
 import {
   projectConversation,
@@ -22,6 +23,9 @@ import {
 
 export class CodexProvider implements SessionProvider {
   readonly id = 'codex' as const;
+  readCompletedResponse(session: Session) {
+    return readCodexResponse(this.home, session);
+  }
   private callbacks: ObserverCallbacks | null = null;
   private transport: CodexTransport;
   private sessions = new Map<string, Session>();

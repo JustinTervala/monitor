@@ -18,6 +18,7 @@ import { displayDirectory } from './directory';
 import { createSearchMatcher } from './search';
 import { canResumeInTerminal, resumeCommand } from '../shared/resume';
 import { ForkIcon, TaskView } from './TaskView';
+import { HandoffSummary } from './HandoffSummary';
 import { forkRelatedIds } from '../shared/forks';
 
 type Editor =
@@ -355,6 +356,7 @@ export function App() {
           <RowProviders providers={sessions.map((session) => session.provider)} />
           <span className="row-name">
             {groupName(state, group)}
+            {sessions.length === 1 && <HandoffSummary state={state} session={sessions[0]} />}
             <span className="row-meta">
               {isSnoozed(group) ? snoozeLabel(group) : counts(state, sessions)}
               {sessions.some(
@@ -715,6 +717,7 @@ export function App() {
                       </span>
                     </span>
                     <strong className="session-title">{session.title}</strong>
+                    <HandoffSummary state={state} session={session} />
                     <span className="session-summary">{session.detail}</span>
                     <code title={session.directory || ''}>
                       {displayDirectory(session.directory, homeDirectory) ||

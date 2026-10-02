@@ -26,6 +26,7 @@ export class MonitorStore {
       throw new Error('Monitor database format is not supported. Your data has been preserved.');
     // One-time data upgrade preserves all organization and saved priority slots.
     delete value.initialized;
+    value.summaries ??= {};
     if (value.version === 1) {
       const cutoff = Date.now() - RECENT_WINDOW_MS;
       value.observations = {};
