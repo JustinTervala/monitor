@@ -17,6 +17,7 @@ interface Job {
 export class SummaryQueue {
   private pending = new Map<string, Job>();
   private receipts = new Map<string, string>();
+  private liveBaselined = new Set<string>();
   private active: Job | null = null;
   private activeDone: Promise<void> | null = null;
   private timer: NodeJS.Timeout | null = null;
@@ -55,6 +56,10 @@ export class SummaryQueue {
   }
   observe(session: Session, firstObservation: boolean) {
     if (this.stopped) return;
+    const firstLiveObservation = !this.liveBaselined.has(session.id);
+    if (session.evidence !== 'live') this.liveBaselined.delete(session.id);
+    else if (session.status === 'running' || session.attentionKey)
+      this.liveBaselined.add(session.id);
     const signature = this.signature(session);
     const old = this.receipts.get(session.id);
     if (session.attentionKey?.startsWith('result:'))
@@ -68,7 +73,12 @@ export class SummaryQueue {
     )
       this.cancel(session.id);
     // Record suppressed completions too; opening, unsnoozing and restoring do not replay them.
-    if (firstObservation || (old === session.attentionKey && !updating) || !this.eligible(session))
+    if (
+      firstObservation ||
+      firstLiveObservation ||
+      (old === session.attentionKey && !updating) ||
+      !this.eligible(session)
+    )
       return;
     this.pending.set(session.id, {
       session: { ...session },

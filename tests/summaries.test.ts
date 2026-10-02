@@ -245,3 +245,20 @@ test('service persists only the latest summary; restart reuses cache without bac
   await setImmediate();
   assert.equal(calls, 1);
 });
+
+test('history hooks cannot baseline a different old result arriving in the first live snapshot', async (t) => {
+  const f = setup(t);
+  f.emit({ ...result('aaaaaa', 'old-hook'), evidence: 'history' }, true);
+  // The service has already baselined notification history. Summary admission
+  // still needs its own first live observation to avoid a desktop backlog.
+  f.emit(result('aaaaaa', 'old-desktop'));
+  await f.advance();
+  assert.deepEqual(f.reads, []);
+  f.emit(result('aaaaaa', 'fresh'));
+  await f.advance();
+  assert.equal(f.calls.length, 1);
+  f.emit({ ...result('aaaaaa', 'history-only'), evidence: 'history' });
+  f.emit(result('aaaaaa', 'reconnected-old'));
+  await f.advance();
+  assert.equal(f.calls.length, 1);
+});
