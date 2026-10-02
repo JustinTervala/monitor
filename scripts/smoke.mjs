@@ -917,10 +917,7 @@ try {
   await taskView
     .getByRole('button', { name: 'View task: Investigate invalidation', exact: true })
     .click();
-  assert.equal(
-    await taskView.getByLabel('Group', { exact: true }).inputValue(),
-    forkGroups.correctness,
-  );
+  assert.equal(await taskView.getByTestId('task-group-name').innerText(), 'Correctness');
   assert.deepEqual(
     await taskView
       .getByTestId('fork-row')
@@ -951,7 +948,85 @@ try {
   await afterArchiveRestart.screenshot({ path: '.runtime/task-details-smoke.png' });
   const beforeAssignment = (await afterArchiveRestart.evaluate(() => window.monitor.snapshot()))
     .state;
-  await taskView.getByLabel('Group', { exact: true }).selectOption(forkGroups.performance);
+  assert.equal(await taskView.getByRole('combobox').count(), 0);
+  const changeGroup = taskView.getByRole('button', { name: 'Change group', exact: true });
+  await changeGroup.click();
+  const groupPicker = afterArchiveRestart.getByRole('dialog', {
+    name: 'Change group',
+    exact: true,
+  });
+  const groupSearch = groupPicker.getByRole('searchbox', { name: 'Search groups', exact: true });
+  await groupSearch.waitFor();
+  assert.equal(await groupSearch.evaluate((element) => document.activeElement === element), true);
+  const expectedRecentGroups = beforeAssignment.groups
+    .filter((g) => g.id !== forkGroups.correctness)
+    .map((g) => ({
+      id: g.id,
+      activity: Math.max(
+        0,
+        ...g.sessionIds.map((id) => {
+          const s = beforeAssignment.sessions[id];
+          return !s || (s.provider === 'codex' && s.archived) ? 0 : (s.activityAt ?? s.updatedAt);
+        }),
+      ),
+    }))
+    .filter((g) => g.activity > 0)
+    .sort((a, b) => b.activity - a.activity || a.id.localeCompare(b.id))
+    .slice(0, 6)
+    .map((g) => g.id);
+  assert.deepEqual(
+    await groupPicker
+      .getByTestId('group-choice')
+      .evaluateAll((buttons) => buttons.map((b) => b.dataset.groupId)),
+    expectedRecentGroups,
+  );
+  await afterArchiveRestart.screenshot({ path: '.runtime/group-picker-recent-smoke.png' });
+  // The search covers the full catalog, including destinations outside the six recent groups.
+  await groupSearch.fill('Historical task 259');
+  await groupPicker
+    .getByRole('button', { name: 'Move to Historical task 259', exact: true })
+    .waitFor();
+  await groupSearch.fill('Experiments');
+  await groupPicker
+    .getByRole('button', { name: 'Move to Experiments', exact: true })
+    .getByText(/Archived in Monitor/)
+    .waitFor();
+  await groupSearch.fill('Correctness');
+  await groupPicker.getByText('No groups match your search.', { exact: true }).waitFor();
+  await groupSearch.fill('nonexistent destination');
+  await groupPicker.getByText('No groups match your search.', { exact: true }).waitFor();
+  await groupSearch.press('Escape');
+  await groupPicker.waitFor({ state: 'hidden' });
+  assert.equal(await changeGroup.evaluate((element) => document.activeElement === element), true);
+  assert.deepEqual(
+    (await afterArchiveRestart.evaluate(() => window.monitor.snapshot())).state.groups,
+    beforeAssignment.groups,
+  );
+  await changeGroup.click();
+  await groupSearch.fill('perfromance');
+  const performanceDestination = groupPicker.getByRole('button', {
+    name: 'Move to Performance',
+    exact: true,
+  });
+  await performanceDestination.waitFor();
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(780, 600));
+  assert.equal(
+    await groupPicker.evaluate(
+      (element) =>
+        element.scrollWidth <= element.clientWidth && element.scrollHeight <= element.clientHeight,
+    ),
+    true,
+  );
+  await afterArchiveRestart.screenshot({ path: '.runtime/group-picker-search-smoke.png' });
+  await groupSearch.press('ArrowDown');
+  assert.equal(
+    await performanceDestination.evaluate((element) => document.activeElement === element),
+    true,
+  );
+  await performanceDestination.press('Enter');
+  await groupPicker.waitFor({ state: 'hidden' });
+  assert.equal(await changeGroup.evaluate((element) => document.activeElement === element), true);
+  assert.equal(await taskView.getByTestId('task-group-name').innerText(), 'Performance');
   await taskView
     .getByRole('status')
     .getByText('Moved to Performance. Fork ancestry is preserved.', { exact: true })
@@ -1049,7 +1124,7 @@ try {
   assert.doesNotMatch(JSON.stringify(savedForks), /SYNTHETIC PRIVATE INSTRUCTIONS/);
   assert.deepEqual(errors, []);
   console.log(
-    'Electron smoke passed: conditional one-click fork-family shortcuts on queue/library/archive rows and group cards, keyboard access, details-first task rows, sibling navigation, breadcrumbs, focus/collapse/expansion, missing parents, reassignment and persistence, responsive layout, source metadata privacy, search, source archives, Library pagination, CLI actions, grouping, priority, and notifications.',
+    'Electron smoke passed: static task group names, recent/search group picker, cancel/focus return, keyboard reassignment and persistence, conditional fork-family shortcuts, details-first navigation, sibling tasks, breadcrumbs, focus/collapse/expansion, missing parents, responsive layout, source metadata privacy, search, source archives, Library pagination, CLI actions, grouping, priority, and notifications.',
   );
 } finally {
   await app?.close();

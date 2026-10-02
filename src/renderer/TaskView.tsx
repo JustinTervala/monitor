@@ -10,6 +10,7 @@ import { forkDescendants, forkFamily, forkPath, visibleForks } from '../shared/f
 import { displayStatus, groupName, isQueued, isSnoozed } from '../shared/queue';
 import type { MonitorState, Session, TaskGroup } from '../shared/types';
 import { displayDirectory } from './directory';
+import { GroupPicker } from './GroupPicker';
 import { ProviderIcon } from './ProviderIcon';
 
 const labels = {
@@ -96,6 +97,15 @@ export function TaskView({
   const [showFamily, setShowFamily] = useState(initialSection === 'family');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  const [changingGroup, setChangingGroup] = useState(false);
+  const changeGroupButton = useRef<HTMLButtonElement>(null);
+  const pickerWasOpen = useRef(false);
+  useLayoutEffect(() => {
+    // After a move, the trigger becomes enabled in this commit. Restore focus
+    // here rather than while the native dialog closes and the button is busy.
+    if (pickerWasOpen.current && !changingGroup) changeGroupButton.current?.focus();
+    pickerWasOpen.current = changingGroup;
+  }, [changingGroup]);
   const family = useMemo(() => forkFamily(state, sessionId), [state, sessionId]);
   const tree = useRef<HTMLDivElement>(null);
   const [positions, setPositions] = useState<Record<string, number>>({});
@@ -391,38 +401,17 @@ export function TaskView({
             <h3>Task details</h3>
             {group && (
               <div className="task-field">
-                <label htmlFor="task-group">Group</label>
-                <select
-                  id="task-group"
-                  value={group.id}
-                  disabled={busy}
-                  onChange={async (event) => {
-                    const target = state.groups.find((g) => g.id === event.target.value);
-                    if (!target) return;
-                    setBusy(true);
-                    try {
-                      if (await assign(sessionId, target.id))
-                        setNotice(
-                          `Moved to ${groupName(state, target)}. Fork ancestry is preserved.`,
-                        );
-                    } finally {
-                      setBusy(false);
-                    }
-                  }}
-                >
-                  {state.groups.map((g) => (
-                    <option value={g.id} key={g.id}>
-                      {groupName(state, g)}
-                      {g.archived
-                        ? ' · Archived'
-                        : isSnoozed(g)
-                          ? ' · Snoozed'
-                          : !isQueued(g)
-                            ? ' · Library'
-                            : ''}
-                    </option>
-                  ))}
-                </select>
+                <span className="task-field-label">Group</span>
+                <div className="task-group-value">
+                  <strong data-testid="task-group-name">{groupName(state, group)}</strong>
+                  <button
+                    ref={changeGroupButton}
+                    disabled={busy}
+                    onClick={() => setChangingGroup(true)}
+                  >
+                    Change group
+                  </button>
+                </div>
                 <button className="task-text-link" onClick={() => viewGroup(group)}>
                   View group →
                 </button>
@@ -540,6 +529,26 @@ export function TaskView({
         <p className="task-notice" role="status">
           {notice}
         </p>
+      )}
+      {changingGroup && group && (
+        <GroupPicker
+          state={state}
+          currentGroupId={group.id}
+          taskTitle={session.title}
+          homeDirectory={homeDirectory}
+          close={() => setChangingGroup(false)}
+          move={async (target) => {
+            setBusy(true);
+            try {
+              const moved = await assign(sessionId, target.id);
+              if (moved)
+                setNotice(`Moved to ${groupName(state, target)}. Fork ancestry is preserved.`);
+              return moved;
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
       )}
       <span className="sr-only" aria-live="polite">
         {session.title} · {group ? groupName(state, group) : 'No group'} ·{' '}
