@@ -781,7 +781,14 @@ try {
       .prepare(
         "INSERT INTO threads(id,title,cwd,source,archived,updated_at,created_at,rollout_path) VALUES(?,?,?,'cli',0,?,?,?)",
       )
-      .run(id, title, '/work/api-service', now, now - 3600 + index * 60, path);
+      .run(
+        id,
+        title,
+        '/work/api-service',
+        now - (forkTasks.length - index) * 60,
+        now - 3600 + index * 60,
+        path,
+      );
   }
   forkDb.close();
   await afterArchiveRestart.evaluate(() => window.monitor.refresh());
@@ -914,6 +921,18 @@ try {
   const rowOrder = await taskView
     .getByTestId('fork-row')
     .evaluateAll((rows) => rows.map((row) => row.dataset.forkId));
+  // The newer read branch comes first; review children precede running children
+  // inside each branch, without moving descendants outside their ancestry.
+  assert.deepEqual(rowOrder, [
+    'codex:fork-root0',
+    'codex:fork-query',
+    'codex:fork-index',
+    'codex:fork-cache',
+    'codex:fork-inval',
+    'codex:fork-ttl00',
+    'codex:fork-stale',
+    'codex:fork-bench',
+  ]);
   await taskView
     .getByRole('button', { name: 'View task: Investigate invalidation', exact: true })
     .click();

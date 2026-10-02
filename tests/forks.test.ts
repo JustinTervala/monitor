@@ -53,7 +53,7 @@ test('list shortcut eligibility agrees with the full graph, including unavailabl
   assertEligibility();
 });
 
-test('fork family spans groups, queue, library, snoozes, and Monitor archives in stable source order', () => {
+test('fork family spans groups, queue, library, snoozes, and Monitor archives, and reorders with source status', () => {
   const state = fixture(),
     before = structuredClone(state);
   const family = forkFamily(state, 'codex:nested')!;
@@ -67,10 +67,53 @@ test('fork family spans groups, queue, library, snoozes, and Monitor archives in
   );
   assert.equal(family.nodes.get('codex:nested')?.depth, 2);
   assert.deepEqual(state, before);
-  state.sessions['codex:child2'].status = 'review';
-  state.sessions['codex:child2'].updatedAt = 999999;
   state.sessions['codex:child2'].title = 'A renamed task';
   assert.deepEqual([...forkFamily(state, 'codex:child2')!.nodes.keys()], [...family.nodes.keys()]);
+  state.sessions['codex:child2'].status = 'review';
+  state.sessions['codex:child2'].updatedAt = 999999;
+  assert.deepEqual(
+    [...forkFamily(state, 'codex:child2')!.nodes.keys()],
+    ['codex:root00', 'codex:child2', 'codex:child1', 'codex:nested'],
+  );
+});
+
+test('siblings sort by status then newest source update, preserving subtrees and stable ties', () => {
+  const state = emptyState();
+  const tasks = [
+    session('root', { status: 'unknown', updatedAt: 0, lineage: { parentId: null } }),
+    session('unknown', { status: 'unknown', updatedAt: 700 }),
+    session('read', { status: 'read', updatedAt: 400 }),
+    session('running', { status: 'running', updatedAt: 300 }),
+    session('review-old', { status: 'review', updatedAt: 10, createdAt: 999 }),
+    session('review-new-b', { status: 'review', updatedAt: 20, createdAt: 2 }),
+    session('review-new-a', { status: 'review', updatedAt: 20, createdAt: 1 }),
+    session('nested', { status: 'review', updatedAt: 800, lineage: { parentId: 'codex:read' } }),
+  ];
+  for (const task of tasks) {
+    if (task.lineage === undefined) task.lineage = { parentId: 'codex:root' };
+    state.sessions[task.id] = task;
+  }
+  const before = structuredClone(state);
+  const order = [
+    'codex:root',
+    'codex:review-new-a',
+    'codex:review-new-b',
+    'codex:review-old',
+    'codex:running',
+    'codex:read',
+    'codex:nested',
+    'codex:unknown',
+  ];
+  assert.deepEqual([...forkFamily(state, 'codex:nested')!.nodes.keys()], order);
+  assert.deepEqual([...forkFamily(state, 'codex:unknown')!.nodes.keys()], order);
+  assert.deepEqual(state, before);
+  state.sessions['codex:review-old'].updatedAt = 30;
+  const family = forkFamily(state, 'codex:nested')!;
+  assert.equal(visibleForks(family, 'codex:nested', new Set(), false)[1].id, 'codex:review-old');
+  assert.deepEqual(
+    visibleForks(family, 'codex:read', new Set(), true).map((n) => n.id),
+    ['codex:root', 'codex:read', 'codex:nested'],
+  );
 });
 
 test('focus keeps the selected path and descendants; collapse omits only that subtree', () => {

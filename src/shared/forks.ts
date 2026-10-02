@@ -1,4 +1,4 @@
-import { isHiddenSession } from './queue';
+import { isHiddenSession, statusOrder } from './queue';
 import type { MonitorState, Session } from './types';
 
 /** Find shortcut destinations without rebuilding every task's family on list pages. */
@@ -78,12 +78,19 @@ export function forkFamily(state: MonitorState, selectedId: string): ForkFamily 
   }
   for (const node of nodes.values())
     if (node.parentId) nodes.get(node.parentId)!.children.push(node.id);
+  // Order siblings by the same status priority and recency used for task
+  // shortcuts. Traversal still keeps every parent ahead of its descendants.
   for (const node of nodes.values())
-    node.children.sort(
-      (a, b) =>
-        (nodes.get(a)!.session?.createdAt || 0) - (nodes.get(b)!.session?.createdAt || 0) ||
-        a.localeCompare(b),
-    );
+    node.children.sort((a, b) => {
+      const left = nodes.get(a)!.session,
+        right = nodes.get(b)!.session;
+      return (
+        statusOrder.indexOf(left?.status ?? 'unknown') -
+          statusOrder.indexOf(right?.status ?? 'unknown') ||
+        (right?.updatedAt ?? 0) - (left?.updatedAt ?? 0) ||
+        a.localeCompare(b)
+      );
+    });
   let rootId = selectedId;
   while (nodes.get(rootId)!.parentId) rootId = nodes.get(rootId)!.parentId!;
   const family = new Map<string, ForkNode>();
