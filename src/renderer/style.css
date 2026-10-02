@@ -566,19 +566,6 @@ h1 {
 .fork-missing strong {
   font-weight: 500;
 }
-.fork-key {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 12px;
-  margin: 16px 5px 0;
-}
-.fork-key span {
-  width: 22px;
-  height: 2px;
-  background: var(--accent);
-}
 .task-details {
   padding: 25px 23px;
   background: var(--panel);

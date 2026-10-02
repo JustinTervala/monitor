@@ -390,10 +390,6 @@ export function TaskView({
                 );
               })}
             </div>
-            <p className="fork-key">
-              <span aria-hidden="true" />
-              Path to selected task
-            </p>
           </section>
         )}
         {(!familyVisible || !expanded) && (
