@@ -42,7 +42,7 @@ function location(group: TaskGroup) {
         : 'In library';
 }
 
-export function ForkIcon() {
+function ForkIcon() {
   return (
     <svg
       width="17"
@@ -91,6 +91,7 @@ export function TaskView({
   const [collapsed, setCollapsed] = useState(new Set<string>());
   const [focused, setFocused] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [showFamily, setShowFamily] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const family = useMemo(() => forkFamily(state, sessionId), [state, sessionId]);
@@ -101,6 +102,11 @@ export function TaskView({
   const groups = new Map(state.groups.flatMap((g) => g.sessionIds.map((id) => [id, g] as const)));
   const session = state.sessions[sessionId],
     group = groups.get(sessionId);
+  const hasFamily = Boolean(family && family.nodes.size > 1);
+  const familyVisible = showFamily && hasFamily;
+  const groupTasks = group
+    ? group.sessionIds.map((id) => state.sessions[id]).filter((s): s is Session => Boolean(s))
+    : [];
   const maxDepth = Math.max(0, ...rows.map((n) => n.depth));
   const lane = (depth: number) => 17 + Math.min(depth, 8) * 16;
   const gutter = lane(maxDepth) + 40;
@@ -122,7 +128,7 @@ export function TaskView({
     observer.observe(element);
     for (const row of element.children) if (row instanceof HTMLElement) observer.observe(row);
     return () => observer.disconnect();
-  }, [geometry, expanded, state]);
+  }, [geometry, expanded, familyVisible, state]);
   function choose(id: string) {
     // Reveal a destination reached from its parent/child links without resetting
     // any other branch, including when the family is currently focused.
@@ -147,19 +153,22 @@ export function TaskView({
   const groupCount = new Set(familyTasks.map((n) => groups.get(n.id)?.id).filter(Boolean)).size;
   const label = primaryLabel(session);
   return (
-    <main className={`task-view${expanded ? ' tree-expanded' : ''}`} aria-label="Task view">
+    <main
+      className={`task-view${familyVisible && expanded ? ' tree-expanded' : ''}`}
+      aria-label="Task view"
+    >
       <header className="task-header">
-        <div className="task-breadcrumb">
+        <nav className="task-breadcrumb" aria-label="Task breadcrumbs">
           <button onClick={back}>{backLabel}</button>
           <span aria-hidden="true">›</span>
-          {group && (
+          {group && (group.name || groupTasks.length > 1) && (
             <>
               <button onClick={() => viewGroup(group)}>{groupName(state, group)}</button>
               <span aria-hidden="true">›</span>
             </>
           )}
-          <span>Task</span>
-        </div>
+          <span aria-current="page">Task details</span>
+        </nav>
         <div className="task-heading">
           <div>
             <h2>{session.title}</h2>
@@ -184,184 +193,198 @@ export function TaskView({
           )}
         </div>
       </header>
-      <div className="task-layout">
-        <section className="fork-family" aria-label="Fork family">
-          <div className="fork-heading">
-            <div>
-              <h3>Fork family</h3>
-              <p>
-                {focused
-                  ? 'Ancestors and descendants of this task'
-                  : `${familyTasks.length} ${familyTasks.length === 1 ? 'task' : 'tasks'} across ${groupCount} ${groupCount === 1 ? 'group' : 'groups'}`}
-              </p>
-            </div>
-            <button
-              className="quiet"
-              aria-pressed={expanded}
-              onClick={() => setExpanded(!expanded)}
-            >
-              {expanded ? '↙ Show details' : '↗ Expand view'}
-            </button>
-          </div>
-          <div className="fork-toolbar">
-            <button aria-pressed={focused} onClick={() => setFocused(!focused)}>
-              <ForkIcon />
-              Focus branch
-            </button>
-            {collapsed.size > 0 && (
-              <button onClick={() => setCollapsed(new Set())}>Expand all</button>
-            )}
-          </div>
-          {family.hasCycle && (
-            <p className="fork-caution">
-              The source reported circular ancestry. One link is omitted to keep navigation usable.
-            </p>
-          )}
-          <div
-            className="fork-tree"
-            ref={tree}
-            style={{ '--fork-gutter': `${gutter}px` } as CSSProperties}
+      {hasFamily && (
+        <nav className="task-sections" aria-label="Task sections">
+          <button
+            aria-pressed={!familyVisible}
+            onClick={() => {
+              setShowFamily(false);
+              setExpanded(false);
+            }}
           >
-            <svg className="fork-lines" width={gutter - 24} height="100%" aria-hidden="true">
-              {rows
-                .filter(
-                  (n) =>
-                    n.parentId &&
-                    positions[n.parentId] !== undefined &&
-                    positions[n.id] !== undefined,
-                )
-                .sort((a, b) => Number(path.has(a.id)) - Number(path.has(b.id)))
-                .map((n) => {
-                  const parent = family.nodes.get(n.parentId!)!,
-                    x = lane(parent.depth),
-                    y = positions[n.id],
-                    from = positions[parent.id];
-                  return (
-                    <path
-                      key={n.id}
-                      className={path.has(n.id) ? 'fork-edge highlighted' : 'fork-edge'}
-                      d={`M${x} ${from} V${y - 8} Q${x} ${y} ${Math.min(x + 8, lane(n.depth))} ${y} H${lane(n.depth)}`}
-                    />
-                  );
-                })}
-              {rows
-                .filter((n) => positions[n.id] !== undefined)
-                .map((n) => (
-                  <g key={n.id} transform={`translate(${lane(n.depth)} ${positions[n.id]})`}>
-                    {n.id === sessionId && <circle className="fork-selected-ring" r="10" />}
-                    {n.session?.status === 'review' ? (
-                      <rect
-                        className="fork-node review"
-                        x="-4"
-                        y="-4"
-                        width="8"
-                        height="8"
-                        transform="rotate(45)"
+            Details
+          </button>
+          <button aria-pressed={familyVisible} onClick={() => setShowFamily(true)}>
+            <ForkIcon /> Fork family <span>{familyTasks.length}</span>
+          </button>
+        </nav>
+      )}
+      <div
+        className={`task-layout${familyVisible ? '' : ' task-overview'}${!familyVisible && groupTasks.length > 1 ? ' with-members' : ''}`}
+      >
+        {familyVisible && (
+          <section className="fork-family" aria-label="Fork family">
+            <div className="fork-heading">
+              <div>
+                <h3>Fork family</h3>
+                <p>
+                  {focused
+                    ? 'Ancestors and descendants of this task'
+                    : `${familyTasks.length} ${familyTasks.length === 1 ? 'task' : 'tasks'} across ${groupCount} ${groupCount === 1 ? 'group' : 'groups'}`}
+                </p>
+              </div>
+              <button
+                className="quiet"
+                aria-pressed={expanded}
+                onClick={() => setExpanded(!expanded)}
+              >
+                {expanded ? '↙ Show details' : '↗ Expand view'}
+              </button>
+            </div>
+            <div className="fork-toolbar">
+              <button aria-pressed={focused} onClick={() => setFocused(!focused)}>
+                <ForkIcon />
+                Focus branch
+              </button>
+              {collapsed.size > 0 && (
+                <button onClick={() => setCollapsed(new Set())}>Expand all</button>
+              )}
+            </div>
+            {family.hasCycle && (
+              <p className="fork-caution">
+                The source reported circular ancestry. One link is omitted to keep navigation
+                usable.
+              </p>
+            )}
+            <div
+              className="fork-tree"
+              ref={tree}
+              style={{ '--fork-gutter': `${gutter}px` } as CSSProperties}
+            >
+              <svg className="fork-lines" width={gutter - 24} height="100%" aria-hidden="true">
+                {rows
+                  .filter(
+                    (n) =>
+                      n.parentId &&
+                      positions[n.parentId] !== undefined &&
+                      positions[n.id] !== undefined,
+                  )
+                  .sort((a, b) => Number(path.has(a.id)) - Number(path.has(b.id)))
+                  .map((n) => {
+                    const parent = family.nodes.get(n.parentId!)!,
+                      x = lane(parent.depth),
+                      y = positions[n.id],
+                      from = positions[parent.id];
+                    return (
+                      <path
+                        key={n.id}
+                        className={path.has(n.id) ? 'fork-edge highlighted' : 'fork-edge'}
+                        d={`M${x} ${from} V${y - 8} Q${x} ${y} ${Math.min(x + 8, lane(n.depth))} ${y} H${lane(n.depth)}`}
                       />
-                    ) : n.session?.status === 'unknown' || !n.session ? (
-                      <rect className="fork-node unknown" x="-4" y="-4" width="8" height="8" />
-                    ) : (
-                      <circle className={`fork-node ${n.session.status}`} r="4.5" />
-                    )}
-                  </g>
-                ))}
-            </svg>
-            {rows.map((node) => {
-              const task = node.session,
-                taskGroup = groups.get(node.id),
-                hidden = collapsed.has(node.id) ? forkDescendants(family, node.id) : [];
-              const review = hidden.filter((n) => n.session?.status === 'review').length;
-              const running = hidden.filter((n) => n.session?.status === 'running').length;
-              return (
-                <div
-                  className="fork-row"
-                  key={node.id}
-                  data-fork-id={node.id}
-                  data-testid="fork-row"
-                >
-                  {task ? (
-                    <button
-                      className="fork-select"
-                      aria-pressed={node.id === sessionId}
-                      aria-label={`View task: ${task.title}`}
-                      onClick={() => choose(node.id)}
-                    >
-                      <span className="fork-title">
-                        <strong>{task.title}</strong>
-                        <span className="fork-meta">
-                          {taskGroup ? groupName(state, taskGroup) : 'No group'}
-                          {taskGroup &&
-                            (!isQueued(taskGroup) || isSnoozed(taskGroup)) &&
-                            ` · ${location(taskGroup)}`}
-                          {node.depth > 8 && ` · Level ${node.depth + 1}`}
-                        </span>
-                        {hidden.length > 0 && (
-                          <span className="fork-hidden">
-                            {hidden.length} hidden{review > 0 && ` · ${review} need review`}
-                            {running > 0 && ` · ${running} running`}
+                    );
+                  })}
+                {rows
+                  .filter((n) => positions[n.id] !== undefined)
+                  .map((n) => (
+                    <g key={n.id} transform={`translate(${lane(n.depth)} ${positions[n.id]})`}>
+                      {n.id === sessionId && <circle className="fork-selected-ring" r="10" />}
+                      {n.session?.status === 'review' ? (
+                        <rect
+                          className="fork-node review"
+                          x="-4"
+                          y="-4"
+                          width="8"
+                          height="8"
+                          transform="rotate(45)"
+                        />
+                      ) : n.session?.status === 'unknown' || !n.session ? (
+                        <rect className="fork-node unknown" x="-4" y="-4" width="8" height="8" />
+                      ) : (
+                        <circle className={`fork-node ${n.session.status}`} r="4.5" />
+                      )}
+                    </g>
+                  ))}
+              </svg>
+              {rows.map((node) => {
+                const task = node.session,
+                  taskGroup = groups.get(node.id),
+                  hidden = collapsed.has(node.id) ? forkDescendants(family, node.id) : [];
+                const review = hidden.filter((n) => n.session?.status === 'review').length;
+                const running = hidden.filter((n) => n.session?.status === 'running').length;
+                return (
+                  <div
+                    className="fork-row"
+                    key={node.id}
+                    data-fork-id={node.id}
+                    data-testid="fork-row"
+                  >
+                    {task ? (
+                      <button
+                        className="fork-select"
+                        aria-pressed={node.id === sessionId}
+                        aria-label={`View task: ${task.title}`}
+                        onClick={() => choose(node.id)}
+                      >
+                        <span className="fork-title">
+                          <strong>{task.title}</strong>
+                          <span className="fork-meta">
+                            {taskGroup ? groupName(state, taskGroup) : 'No group'}
+                            {taskGroup &&
+                              (!isQueued(taskGroup) || isSnoozed(taskGroup)) &&
+                              ` · ${location(taskGroup)}`}
+                            {node.depth > 8 && ` · Level ${node.depth + 1}`}
                           </span>
-                        )}
-                      </span>
-                      <span className="fork-row-status">
-                        <span>{stateLabel(state, task)}</span>
-                        <time
-                          dateTime={
-                            task.updatedAt ? new Date(task.updatedAt).toISOString() : undefined
-                          }
-                        >
-                          {age(task.updatedAt)}
-                        </time>
-                      </span>
-                    </button>
-                  ) : (
-                    <div className="fork-missing">
-                      <strong>Parent task unavailable</strong>
-                      <span>Missing or hidden in the source app</span>
-                    </div>
-                  )}
-                  {node.children.length > 0 && (
-                    <button
-                      className="fork-collapse"
-                      aria-label={`${collapsed.has(node.id) ? 'Expand' : 'Collapse'} forks of ${task?.title || 'unavailable parent'}`}
-                      aria-expanded={!collapsed.has(node.id)}
-                      onClick={() => {
-                        if (
-                          !collapsed.has(node.id) &&
-                          node.id !== sessionId &&
-                          path.has(node.id) &&
-                          task
-                        )
-                          select(node.id);
-                        if (!task && path.has(node.id)) return;
-                        setCollapsed((old) => {
-                          const next = new Set(old);
-                          if (next.has(node.id)) next.delete(node.id);
-                          else next.add(node.id);
-                          return next;
-                        });
-                      }}
-                      disabled={!task && path.has(node.id)}
-                    >
-                      {collapsed.has(node.id) ? '›' : '⌄'}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <p className="fork-key">
-            <span aria-hidden="true" />
-            Path to selected task
-          </p>
-          {familyTasks.length === 1 && (
-            <p className="task-empty">
-              {session.lineage
-                ? 'No related forks are currently available.'
-                : 'Fork ancestry is unavailable for this task.'}
+                          {hidden.length > 0 && (
+                            <span className="fork-hidden">
+                              {hidden.length} hidden{review > 0 && ` · ${review} need review`}
+                              {running > 0 && ` · ${running} running`}
+                            </span>
+                          )}
+                        </span>
+                        <span className="fork-row-status">
+                          <span>{stateLabel(state, task)}</span>
+                          <time
+                            dateTime={
+                              task.updatedAt ? new Date(task.updatedAt).toISOString() : undefined
+                            }
+                          >
+                            {age(task.updatedAt)}
+                          </time>
+                        </span>
+                      </button>
+                    ) : (
+                      <div className="fork-missing">
+                        <strong>Parent task unavailable</strong>
+                        <span>Missing or hidden in the source app</span>
+                      </div>
+                    )}
+                    {node.children.length > 0 && (
+                      <button
+                        className="fork-collapse"
+                        aria-label={`${collapsed.has(node.id) ? 'Expand' : 'Collapse'} forks of ${task?.title || 'unavailable parent'}`}
+                        aria-expanded={!collapsed.has(node.id)}
+                        onClick={() => {
+                          if (
+                            !collapsed.has(node.id) &&
+                            node.id !== sessionId &&
+                            path.has(node.id) &&
+                            task
+                          )
+                            select(node.id);
+                          if (!task && path.has(node.id)) return;
+                          setCollapsed((old) => {
+                            const next = new Set(old);
+                            if (next.has(node.id)) next.delete(node.id);
+                            else next.add(node.id);
+                            return next;
+                          });
+                        }}
+                        disabled={!task && path.has(node.id)}
+                      >
+                        {collapsed.has(node.id) ? '›' : '⌄'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <p className="fork-key">
+              <span aria-hidden="true" />
+              Path to selected task
             </p>
-          )}
-        </section>
-        {!expanded && (
+          </section>
+        )}
+        {(!familyVisible || !expanded) && (
           <aside className="task-details" aria-label="Task details">
             <h3>Task details</h3>
             {group && (
@@ -484,6 +507,31 @@ export function TaskView({
               )}
             </div>
           </aside>
+        )}
+        {!familyVisible && group && groupTasks.length > 1 && (
+          <section className="task-group-members" aria-label="Tasks in this group">
+            <h3>
+              Tasks in this group <span>{groupTasks.length}</span>
+            </h3>
+            <button className="task-text-link" onClick={() => viewGroup(group)}>
+              {groupName(state, group)} →
+            </button>
+            {groupTasks.map((member) => (
+              <button
+                className="task-member"
+                key={member.id}
+                aria-label={`View task: ${member.title}`}
+                aria-pressed={member.id === sessionId}
+                onClick={() => choose(member.id)}
+              >
+                <strong>{member.title}</strong>
+                <span>
+                  <span className={`status-dot ${member.status}`} aria-hidden="true" />
+                  {stateLabel(state, member)}
+                </span>
+              </button>
+            ))}
+          </section>
         )}
       </div>
       {notice && (

@@ -157,7 +157,16 @@ export function LibraryPage({
                     data-group-id={group.id}
                     className={`archive-row${selected === group.id ? ' selected' : ''}`}
                   >
-                    <button className="row-select" onClick={() => select(group.id)}>
+                    <button
+                      className="row-select"
+                      aria-label={
+                        sessions.length === 1
+                          ? `View task: ${sessions[0].title}${group.name ? ` · ${group.name}` : ''}`
+                          : undefined
+                      }
+                      title={sessions.length === 1 ? 'View task details' : 'View group tasks'}
+                      onClick={() => select(group.id)}
+                    >
                       <RowProviders providers={sessions.map((session) => session.provider)} />
                       <span className="row-name">
                         {name}

@@ -163,7 +163,34 @@ try {
     'codex://threads/bbbbbb',
   ]);
   assert.equal(await page.getByRole('complementary', { name: 'Workstream details' }).count(), 0);
-  await page.getByRole('button', { name: /Build the billing rollout.*1 running/ }).click();
+  // The task row itself opens details, even when there is no fork metadata.
+  const billingTask = page.getByRole('button', {
+    name: 'View task: Build the billing rollout',
+    exact: true,
+  });
+  await billingTask.focus();
+  await billingTask.press('Enter');
+  const initialTaskView = page.getByRole('main', { name: 'Task view' });
+  await initialTaskView
+    .getByRole('heading', { name: 'Build the billing rollout', exact: true })
+    .waitFor();
+  assert.equal(
+    await initialTaskView.getByRole('region', { name: 'Fork family', exact: true }).count(),
+    0,
+  );
+  assert.equal(await initialTaskView.getByRole('navigation', { name: 'Task sections' }).count(), 0);
+  assert.equal(
+    await initialTaskView.getByRole('complementary', { name: 'Task details' }).count(),
+    1,
+  );
+  assert.deepEqual(
+    await initialTaskView
+      .getByRole('navigation', { name: 'Task breadcrumbs' })
+      .getByRole('button')
+      .allTextContents(),
+    ['Queue'],
+  );
+  await initialTaskView.getByRole('button', { name: 'View group →', exact: true }).click();
   await page.getByRole('button', { name: 'Edit group', exact: true }).click();
   await page.getByRole('dialog').screenshot({ path: '.runtime/midnight-editor.png' });
   await page.getByRole('textbox', { name: 'Group name' }).fill('Billing rollout');
@@ -498,8 +525,12 @@ try {
     await reopened.getByRole('button', { name: 'Show in iTerm', exact: true }).count(),
     0,
   );
-  assert.equal((await cliRow.getByTestId('open-task').innerText()).replace(/\s+/g, ' '), '');
   await reopened.screenshot({ path: '.runtime/cli-smoke.png' });
+  await reopened
+    .getByRole('navigation', { name: 'Task breadcrumbs' })
+    .getByRole('button', { name: 'Queue', exact: true })
+    .click();
+  assert.equal((await cliRow.getByTestId('open-task').innerText()).replace(/\s+/g, ' '), '');
 
   // A large backlog is indexed without flooding the queue or mounting every row.
   const oldCatalog = new DatabaseSync(join(home, 'state_5.sqlite'));
@@ -627,10 +658,11 @@ try {
   };
   archiveInCodex(['history-258'], true);
   await reopened.evaluate(() => window.monitor.refresh());
-  await reopened.getByTestId('library-row').waitFor({ state: 'hidden' });
   await reopened
-    .getByRole('complementary', { name: 'Workstream details' })
-    .waitFor({ state: 'hidden' });
+    .getByText('This task is no longer available in Monitor.', { exact: true })
+    .waitFor();
+  await reopened.getByRole('button', { name: '← Back to Library', exact: true }).click();
+  assert.equal(await reopened.getByTestId('library-row').count(), 0);
   archiveInCodex(['dddddd'], true);
   await reopened.evaluate(() => window.monitor.refresh());
   await reopened.getByRole('button', { name: /^Queue / }).click();
@@ -642,7 +674,16 @@ try {
   await reopened.evaluate(() => window.monitor.refresh());
   await reopened.getByRole('button', { name: /^Archived / }).click();
   const billingArchive = reopened.getByTestId('archive-row').filter({ hasText: 'Billing rollout' });
+  await billingArchive.getByText('1 task', { exact: true }).waitFor();
   await billingArchive.locator('.row-select').click();
+  await reopened
+    .getByRole('main', { name: 'Task view' })
+    .getByRole('heading', { name: 'Build the billing rollout', exact: true })
+    .waitFor();
+  await reopened
+    .getByRole('navigation', { name: 'Task breadcrumbs' })
+    .getByRole('button', { name: 'Billing rollout', exact: true })
+    .click();
   await reopened.waitForFunction(
     () => document.querySelectorAll('[data-testid="session-card"]').length === 1,
   );
@@ -716,6 +757,7 @@ try {
     ['fork-bench', 'Benchmark alternative', 'fork-cache'],
     ['fork-query', 'Explore query changes', 'fork-root0'],
     ['fork-index', 'Test covering index', 'fork-query'],
+    ['solo-task0', 'Standalone task', null],
   ];
   const forkDb = new DatabaseSync(join(home, 'state_5.sqlite'));
   forkDb.exec(
@@ -784,6 +826,18 @@ try {
   });
   await afterArchiveRestart.getByRole('button', { name: /^Queue / }).click();
   await afterArchiveRestart
+    .getByRole('button', { name: 'View task: Standalone task', exact: true })
+    .click();
+  const standaloneView = afterArchiveRestart.getByRole('main', { name: 'Task view' });
+  await standaloneView.getByRole('heading', { name: 'Standalone task', exact: true }).waitFor();
+  assert.equal(await standaloneView.getByRole('navigation', { name: 'Task sections' }).count(), 0);
+  assert.equal(await standaloneView.getByTestId('fork-row').count(), 0);
+  await standaloneView.getByText('No parent recorded', { exact: true }).waitFor();
+  await standaloneView
+    .getByRole('navigation', { name: 'Task breadcrumbs' })
+    .getByRole('button', { name: 'Queue', exact: true })
+    .click();
+  await afterArchiveRestart
     .getByTestId('group-row')
     .filter({ hasText: 'Performance' })
     .locator('.row-select')
@@ -793,6 +847,30 @@ try {
     .click();
   const taskView = afterArchiveRestart.getByRole('main', { name: 'Task view' });
   await taskView.getByRole('heading', { name: 'Try caching', exact: true }).waitFor();
+  assert.equal(await taskView.getByTestId('fork-row').count(), 0);
+  await taskView
+    .getByRole('navigation', { name: 'Task breadcrumbs' })
+    .getByRole('button', { name: 'Performance', exact: true })
+    .waitFor();
+  const groupTasks = taskView.getByRole('region', { name: 'Tasks in this group' });
+  assert.equal(await groupTasks.getByRole('button', { name: /^View task:/ }).count(), 3);
+  await groupTasks
+    .getByRole('button', { name: 'View task: Benchmark alternative', exact: true })
+    .click();
+  await taskView.getByRole('heading', { name: 'Benchmark alternative', exact: true }).waitFor();
+  await groupTasks.getByRole('button', { name: 'View task: Try caching', exact: true }).click();
+  // Return to the selected group without losing the queue search or group context.
+  await taskView
+    .getByRole('navigation', { name: 'Task breadcrumbs' })
+    .getByRole('button', { name: 'Queue', exact: true })
+    .click();
+  assert.equal(await afterArchiveRestart.getByTestId('session-card').count(), 3);
+  await afterArchiveRestart
+    .getByTestId('session-card')
+    .filter({ hasText: 'Try caching' })
+    .getByText('View task details', { exact: false })
+    .click();
+  await taskView.getByRole('button', { name: 'Fork family 8', exact: true }).click();
   assert.equal(await taskView.getByTestId('fork-row').count(), 8);
   await taskView.getByText('8 tasks across 4 groups', { exact: true }).waitFor();
   await taskView.getByText('Experiments · Archived in Monitor', { exact: true }).waitFor();
@@ -831,6 +909,9 @@ try {
   await taskView.getByRole('button', { name: 'Investigate invalidation ↗', exact: true }).click();
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1120, 960));
   await afterArchiveRestart.screenshot({ path: '.runtime/fork-task-smoke.png' });
+  await taskView.getByRole('button', { name: 'Details', exact: true }).click();
+  assert.equal(await taskView.getByTestId('fork-row').count(), 0);
+  await afterArchiveRestart.screenshot({ path: '.runtime/task-details-smoke.png' });
   const beforeAssignment = (await afterArchiveRestart.evaluate(() => window.monitor.snapshot()))
     .state;
   await taskView.getByLabel('Group', { exact: true }).selectOption(forkGroups.performance);
@@ -850,6 +931,8 @@ try {
   assert.deepEqual(afterAssignment.groups.find((g) => g.id === forkGroups.correctness).sessionIds, [
     'codex:fork-stale',
   ]);
+  assert.equal(await taskView.getByTestId('fork-row').count(), 0);
+  await taskView.getByRole('button', { name: 'Fork family 8', exact: true }).click();
   assert.equal(await taskView.getByTestId('fork-row').count(), 8);
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(780, 900));
   assert.equal(
@@ -857,6 +940,13 @@ try {
     true,
   );
   await afterArchiveRestart.screenshot({ path: '.runtime/fork-task-narrow-smoke.png' });
+  await taskView.getByRole('button', { name: 'Details', exact: true }).click();
+  assert.equal(
+    await taskView.evaluate((element) => element.scrollWidth <= element.clientWidth),
+    true,
+  );
+  await afterArchiveRestart.screenshot({ path: '.runtime/task-details-narrow-smoke.png' });
+  await taskView.getByRole('button', { name: 'Fork family 8', exact: true }).click();
   archiveInCodex(['fork-root0'], true);
   await afterArchiveRestart.evaluate(() => window.monitor.refresh());
   await taskView.getByText('Parent task unavailable', { exact: true }).waitFor();
@@ -866,7 +956,7 @@ try {
   // The task view also opens from Library and Monitor's archive.
   await afterArchiveRestart.getByRole('button', { name: /^Archived / }).click();
   await afterArchiveRestart
-    .getByRole('button', { name: 'View task: Try bounded TTL', exact: true })
+    .getByRole('button', { name: 'View task: Try bounded TTL · Experiments', exact: true })
     .click();
   await afterArchiveRestart
     .getByRole('main', { name: 'Task view' })
@@ -877,7 +967,7 @@ try {
     .getByRole('textbox', { name: 'Filter workstreams' })
     .fill('Correctness');
   await afterArchiveRestart
-    .getByRole('button', { name: 'View task: Reproduce stale reads', exact: true })
+    .getByRole('button', { name: 'View task: Reproduce stale reads · Correctness', exact: true })
     .click();
   await afterArchiveRestart
     .getByRole('main', { name: 'Task view' })
@@ -901,7 +991,7 @@ try {
   assert.doesNotMatch(JSON.stringify(savedForks), /SYNTHETIC PRIVATE INSTRUCTIONS/);
   assert.deepEqual(errors, []);
   console.log(
-    'Electron smoke passed: task views and fork families across groups, focus/collapse/expansion, missing parents, group reassignment and persistence, responsive layout, source metadata privacy, search, source archives, Library pagination, CLI actions, grouping, priority, and notifications. Screenshots: .runtime/fork-task-smoke.png, .runtime/fork-task-narrow-smoke.png, .runtime/smoke.png, .runtime/archive-smoke.png and .runtime/cli-smoke.png',
+    'Electron smoke passed: details-first task rows, group task cards and sibling navigation, breadcrumbs, optional fork families, focus/collapse/expansion, missing parents, group reassignment and persistence, responsive layout, source metadata privacy, search, source archives, Library pagination, CLI actions, grouping, priority, and notifications. Screenshots include .runtime/task-details-smoke.png and .runtime/task-details-narrow-smoke.png.',
   );
 } finally {
   await app?.close();

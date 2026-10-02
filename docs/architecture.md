@@ -23,7 +23,7 @@ Claude desktop records    → ClaudeProvider ┘       │
 - `src/main/store.ts`: Monitor's SQLite storage. A single versioned JSON document is updated transactionally; a relational schema can follow when query volume warrants it.
 - `src/main/main.ts`: window/menu-bar lifecycle, native notifications, validated navigation and IPC.
 - `src/renderer/`: grouped queue, priority view, project/recency Library and archive, detail pane, and editors.
-- `src/renderer/TaskView.tsx`: cross-group task navigation, fork tree, branch focus/collapse, expanded view, and individual task assignment.
+- `src/renderer/TaskView.tsx`: primary task details, breadcrumb and group-member navigation, an optional fork-family tab with branch focus/collapse and expanded view, and individual task assignment.
 
 ## Authority and persistence
 

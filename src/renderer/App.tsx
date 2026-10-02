@@ -17,7 +17,7 @@ import { ProviderIcon, RowProviders } from './ProviderIcon';
 import { displayDirectory } from './directory';
 import { createSearchMatcher } from './search';
 import { canResumeInTerminal, resumeCommand } from '../shared/resume';
-import { ForkIcon, TaskView } from './TaskView';
+import { TaskView } from './TaskView';
 
 type Editor =
   { kind: 'rename'; group: TaskGroup } | { kind: 'merge'; source: TaskGroup; target: TaskGroup };
@@ -239,7 +239,6 @@ export function App() {
   }
   function openAction(group: TaskGroup) {
     const members = groupSessions(state, group);
-    const single = members.length === 1 ? members[0] : null;
     const nextTask = members
       .filter((session) => primary(session))
       .sort(
@@ -250,16 +249,6 @@ export function App() {
     const destination = nextTask && primary(nextTask);
     return (
       <>
-        {single && (
-          <button
-            className="open-row-action task-row-action"
-            aria-label={`View task: ${single.title}`}
-            title="View task and fork family"
-            onClick={() => setSelectedTask(single.id)}
-          >
-            <ForkIcon />
-          </button>
-        )}
         {destination && (
           <button
             className="open-row-action"
@@ -285,6 +274,13 @@ export function App() {
         )}
       </>
     );
+  }
+  function selectRow(group: TaskGroup) {
+    const members = groupSessions(state, group);
+    if (members.length === 1) {
+      setSelected(null);
+      setSelectedTask(members[0].id);
+    } else setSelected(group.id);
   }
   function row(group: TaskGroup) {
     const section = groupSection(state, group),
@@ -322,7 +318,16 @@ export function App() {
         <span className="rank" title="Global priority">
           {state.groups.indexOf(group) + 1}
         </span>
-        <button className="row-select" onClick={() => setSelected(group.id)}>
+        <button
+          className="row-select"
+          aria-label={
+            sessions.length === 1
+              ? `View task: ${sessions[0].title}${group.name ? ` · ${group.name}` : ''}`
+              : undefined
+          }
+          title={sessions.length === 1 ? 'View task details' : 'View group tasks'}
+          onClick={() => selectRow(group)}
+        >
           <span
             className={`status-dot ${section}${sessions.some((s) => s.status === 'unknown') ? ' stale' : ''}`}
             aria-hidden="true"
@@ -508,7 +513,10 @@ export function App() {
               search={search}
               matches={matches}
               selected={selected}
-              select={setSelected}
+              select={(id) => {
+                const group = state.groups.find((g) => g.id === id);
+                if (group) selectRow(group);
+              }}
               restore={(group) => void restore(group)}
             />
           ) : (
@@ -670,29 +678,31 @@ export function App() {
               </div>
               {groupSessions(state, selectedGroup).map((session) => (
                 <div className="session-card" key={session.id} data-testid="session-card">
-                  <div className="session-status">
-                    <span className={`status-dot ${session.status}`} aria-hidden="true" />
-                    {session.status === 'unknown' && displayStatus(state, session) !== 'unknown'
-                      ? `Last seen ${statusLabel[displayStatus(state, session)].toLowerCase()}`
-                      : statusLabel[session.status]}
-                    <span className="provider-name">
-                      <ProviderIcon provider={session.provider} />
-                      {session.provider}
-                    </span>
-                  </div>
                   <button
-                    className="session-link"
+                    className="session-select"
                     aria-label={`View task: ${session.title}`}
                     onClick={() => setSelectedTask(session.id)}
                   >
-                    {session.title}
-                    <ForkIcon />
+                    <span className="session-status">
+                      <span className={`status-dot ${session.status}`} aria-hidden="true" />
+                      {session.status === 'unknown' && displayStatus(state, session) !== 'unknown'
+                        ? `Last seen ${statusLabel[displayStatus(state, session)].toLowerCase()}`
+                        : statusLabel[session.status]}
+                      <span className="provider-name">
+                        <ProviderIcon provider={session.provider} />
+                        {session.provider}
+                      </span>
+                    </span>
+                    <strong className="session-title">{session.title}</strong>
+                    <span className="session-summary">{session.detail}</span>
+                    <code title={session.directory || ''}>
+                      {displayDirectory(session.directory, homeDirectory) ||
+                        'Source directory unavailable'}
+                    </code>
+                    <span className="session-details-link">
+                      View task details <span aria-hidden="true">→</span>
+                    </span>
                   </button>
-                  <p>{session.detail}</p>
-                  <code title={session.directory || ''}>
-                    {displayDirectory(session.directory, homeDirectory) ||
-                      'Source directory unavailable'}
-                  </code>
                   <div className="session-actions">
                     {primary(session) && (
                       <button onClick={() => void go(session)}>{primary(session)!.label} ↗</button>
