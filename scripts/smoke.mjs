@@ -126,6 +126,7 @@ try {
   app = await electron.launch({ args: ['.'], env });
   const page = await app.firstWindow(),
     errors = [];
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   page.on('pageerror', (error) => errors.push(String(error)));
   await page.getByRole('heading', { name: 'Your queue.' }).waitFor();
   await page.waitForFunction(
@@ -140,6 +141,39 @@ try {
     await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme),
     'dark',
   );
+  // Hold a real pointer press, then release off the control without activating it.
+  const motionButton = page.locator('.page-nav button[aria-current="page"]');
+  const motionBox = await motionButton.boundingBox();
+  await page.mouse.move(motionBox.x + motionBox.width / 2, motionBox.y + motionBox.height / 2);
+  await page.mouse.down();
+  await page.waitForFunction(() => {
+    const button = document.querySelector('.page-nav button[aria-current="page"]');
+    return Math.abs(Number(getComputedStyle(button).scale) - 0.97) < 0.001;
+  });
+  await page.mouse.move(0, 0);
+  await page.mouse.up();
+  await page.waitForFunction(() => {
+    const button = document.querySelector('.page-nav button[aria-current="page"]');
+    const scale = getComputedStyle(button).scale;
+    return scale === 'none' || Math.abs(Number(scale) - 1) < 0.001;
+  });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.mouse.move(motionBox.x + motionBox.width / 2, motionBox.y + motionBox.height / 2);
+  await page.mouse.down();
+  assert.deepEqual(
+    await motionButton.evaluate((button) => {
+      const style = getComputedStyle(button);
+      return {
+        scale: style.scale,
+        translate: style.translate,
+        transition: style.transitionDuration,
+      };
+    }),
+    { scale: 'none', translate: 'none', transition: '0s' },
+  );
+  await page.mouse.move(0, 0);
+  await page.mouse.up();
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   mkdirSync('.runtime', { recursive: true });
   await page.screenshot({ path: '.runtime/midnight-statuses.png' });
   assert.equal(await page.locator('select').count(), 0);
@@ -208,6 +242,16 @@ try {
   );
   await initialTaskView.getByRole('button', { name: 'View group →', exact: true }).click();
   await page.getByRole('button', { name: 'Edit group', exact: true }).click();
+  assert.equal(
+    await page.getByRole('dialog').evaluate((dialog) => getComputedStyle(dialog).animationName),
+    'dialog-reveal',
+  );
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  assert.equal(
+    await page.getByRole('dialog').evaluate((dialog) => getComputedStyle(dialog).animationName),
+    'none',
+  );
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.getByRole('dialog').screenshot({ path: '.runtime/midnight-editor.png' });
   await page.getByRole('textbox', { name: 'Group name' }).fill('Billing rollout');
   await page.getByRole('button', { name: 'Save changes' }).click();
@@ -550,6 +594,8 @@ try {
 
   // A large backlog is indexed without flooding the queue or mounting every row.
   const oldCatalog = new DatabaseSync(join(home, 'state_5.sqlite'));
+  // Load the fixture atomically while the source observer is polling it.
+  oldCatalog.exec('PRAGMA busy_timeout=1000; BEGIN IMMEDIATE;');
   const addOld = oldCatalog.prepare("INSERT INTO threads VALUES(?,?,?,'cli',0,?)");
   for (let i = 0; i < 260; i++)
     addOld.run(
@@ -558,6 +604,7 @@ try {
       join(homedir(), 'work/history'),
       now - 30 * 86400 - i,
     );
+  oldCatalog.exec('COMMIT;');
   oldCatalog.close();
   await reopened.evaluate(() => window.monitor.refresh());
   await reopened.waitForFunction(
@@ -1301,7 +1348,7 @@ try {
   ]).finally(() => clearTimeout(quitTimeout));
   app = undefined;
   console.log(
-    'Electron smoke passed: graceful shutdown, lazy handoff summaries, exact final-response reads, ephemeral Luna runner, cache privacy, archive deletion without replay, static task group names, recent/search group picker, cancel/focus return, keyboard reassignment and persistence, conditional fork-family shortcuts, details-first navigation, sibling tasks, breadcrumbs, focus/collapse/expansion, missing parents, responsive layout, source metadata privacy, search, source archives, Library pagination, CLI actions, grouping, priority, and notifications.',
+    'Electron smoke passed: button press/release, reduced motion, dialog entrance, graceful shutdown, lazy handoff summaries, exact final-response reads, ephemeral Luna runner, cache privacy, archive deletion without replay, static task group names, recent/search group picker, cancel/focus return, keyboard reassignment and persistence, conditional fork-family shortcuts, details-first navigation, sibling tasks, breadcrumbs, focus/collapse/expansion, missing parents, responsive layout, source metadata privacy, search, source archives, Library pagination, CLI actions, grouping, priority, and notifications.',
   );
 } finally {
   await app?.close();
