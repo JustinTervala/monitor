@@ -265,5 +265,6 @@ app.on('before-quit', (event) => {
   service = null;
   tray?.destroy();
   tray = null;
-  void stopped.finally(() => app.quit());
+  // Let Electron finish cancelling this quit before starting the final one.
+  void stopped.finally(() => setImmediate(() => app.quit()));
 });

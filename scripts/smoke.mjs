@@ -1287,8 +1287,21 @@ try {
     {},
   );
   assert.deepEqual(errors, []);
+  // Exercise the app's own quit path, not Playwright's force-close fallback.
+  const exited = new Promise((resolve) => app.process().once('exit', resolve));
+  await app.evaluate(({ app }) => {
+    setTimeout(() => app.quit(), 0);
+  });
+  let quitTimeout;
+  await Promise.race([
+    exited,
+    new Promise((_, reject) => {
+      quitTimeout = setTimeout(() => reject(new Error('Monitor did not quit')), 5000);
+    }),
+  ]).finally(() => clearTimeout(quitTimeout));
+  app = undefined;
   console.log(
-    'Electron smoke passed: lazy handoff summaries, exact final-response reads, ephemeral Luna runner, cache privacy, archive deletion without replay, static task group names, recent/search group picker, cancel/focus return, keyboard reassignment and persistence, conditional fork-family shortcuts, details-first navigation, sibling tasks, breadcrumbs, focus/collapse/expansion, missing parents, responsive layout, source metadata privacy, search, source archives, Library pagination, CLI actions, grouping, priority, and notifications.',
+    'Electron smoke passed: graceful shutdown, lazy handoff summaries, exact final-response reads, ephemeral Luna runner, cache privacy, archive deletion without replay, static task group names, recent/search group picker, cancel/focus return, keyboard reassignment and persistence, conditional fork-family shortcuts, details-first navigation, sibling tasks, breadcrumbs, focus/collapse/expansion, missing parents, responsive layout, source metadata privacy, search, source archives, Library pagination, CLI actions, grouping, priority, and notifications.',
   );
 } finally {
   await app?.close();
