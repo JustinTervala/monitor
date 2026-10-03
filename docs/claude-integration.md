@@ -76,8 +76,9 @@ Result identity is present even when the result is read, so a turn that finishes
 
 Disconnect and reconnect:
 
-- When the desktop quits, the adapter emits offline health first, then every session as unavailable.
+- When the desktop quits, desktop-only sessions become unavailable. Notification baselines reset only for sessions that lost observation; live terminal sessions keep their baselines and continue to notify.
 - On relaunch, the next observation is a fresh baseline. Results that landed while offline do not notify.
+- Missing or unreadable tracked desktop records also become unavailable, using cached identity metadata to preserve task links and workstream membership. Recovering a record establishes a quiet baseline.
 - A missing CLI process is never treated as success. The key names the specific recorded assistant message, not "the latest turn succeeded".
 
 ### Terminal sessions
@@ -92,6 +93,8 @@ Disconnect and reconnect:
 | No live process and no recorded result                | Unavailable   | none                        |
 
 A terminal has no read receipt or focus signal. A result stays in Needs review until the session ends, or until the next prompt makes it run again. Once the process has exited, the evidence is `history`, so a result first seen after exit does not notify.
+
+A desktop task resumed with `claude --resume` keeps its existing Monitor identity, desktop link, and workstream. Its live terminal registry and newer CLI hooks supply running, approval, and completion evidence even when Claude desktop is closed. Older desktop results cannot acknowledge that terminal work. Active desktop execution or newer desktop activity restores desktop evidence. The lazy summary reader follows whichever source supplied the completion. Hook metadata comes from the newest event, and a new session start invalidates an earlier terminal result.
 
 ## Limitations
 
@@ -139,6 +142,9 @@ Fixture-tested (`tests/claude.test.ts`, `tests/service.test.ts`):
 - Running → approval → running → result → acknowledgment.
 - Error acknowledgment.
 - Offline → reconnect baseline.
+- Missing/unreadable tracked records preserving organization and recovering quietly.
+- Terminal completions and approvals for desktop-origin sessions, including desktop closed.
+- Desktop quit preserving independent terminal notifications.
 - Archived tasks followed only when already admitted.
 - URL validation.
 - Snoozed and archived mixed-provider groups staying quiet.

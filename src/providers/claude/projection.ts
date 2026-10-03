@@ -7,6 +7,8 @@ export function sessionFromRecord(
   live: LiveProcess | undefined,
   desktopRunning: boolean,
   now = Date.now(),
+  hooks?: HookSession,
+  terminal?: TerminalProcess,
 ): Session {
   const base = {
     id: `claude:${record.sessionId}`,
@@ -27,9 +29,37 @@ export function sessionFromRecord(
     archived: record.archived,
     openable: true,
     resumeId: record.cliSessionId,
-    // Set when the desktop session was resumed with `claude --resume` in a terminal.
-    terminalPid: live && 'sessionId' in live ? live.pid : null,
+    terminalPid: null,
   };
+  const desktopActive = desktopRunning && live && live.status !== 'idle';
+  const terminalActivity = Math.max(
+    hooks?.startedAt ?? 0,
+    hooks?.result?.at ?? 0,
+    hooks?.endedAt ?? 0,
+  );
+  const terminalCurrent =
+    terminal || (hooks?.entrypoint === 'cli' && terminalActivity > base.updatedAt);
+  if (record.cliSessionId && terminalCurrent && !desktopActive) {
+    const observation = sessionFromTerminal(
+      record.cliSessionId,
+      hooks?.entrypoint === 'cli' ? hooks : undefined,
+      terminal,
+      now,
+    );
+    return {
+      ...base,
+      directory: observation.directory ?? base.directory,
+      updatedAt: Math.max(base.updatedAt, observation.updatedAt),
+      activityAt: observation.activityAt,
+      status: observation.status,
+      detail: observation.detail,
+      attentionKey: observation.attentionKey,
+      completionSource: observation.completionSource,
+      awaitingInput: observation.awaitingInput,
+      evidence: observation.evidence,
+      terminalPid: observation.terminalPid,
+    };
+  }
   if (!desktopRunning)
     return {
       ...base,
@@ -113,6 +143,7 @@ export function sessionFromTerminal(
     archived: false,
     openable: false,
     resumeId: sessionId,
+    completionSource: 'terminal' as const,
     terminalPid: live?.pid ?? null,
   };
   const evidence: Session['evidence'] = live ? 'live' : 'history';
@@ -135,7 +166,7 @@ export function sessionFromTerminal(
     };
   if (live?.status === 'busy' || live?.status === 'shell')
     return observed('running', 'Claude is working in the terminal');
-  const result = hooks?.result;
+  const result = hooks?.result && (hooks.startedAt ?? 0) <= hooks.result.at ? hooks.result : null;
   if (!result)
     return live
       ? observed(

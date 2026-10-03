@@ -93,9 +93,13 @@ export class MonitorService extends EventEmitter {
       await provider.start({
         sessions: (sessions) => this.ingest(sessions),
         health: (health) => {
-          if (health.state === 'offline')
+          if (health.disconnectedSessionIds) {
+            for (const id of health.disconnectedSessionIds)
+              if (this.state.sessions[id]?.provider === health.provider) this.baselined.delete(id);
+          } else if (health.state === 'offline') {
             for (const id of this.baselined)
               if (this.state.sessions[id]?.provider === health.provider) this.baselined.delete(id);
+          }
           this.health.set(health.provider, health);
           this.publish();
         },

@@ -211,6 +211,7 @@ function readHookFile(path: string): Record<string, string> | null {
 /** Read `<dir>/<session>.{start,result,end}` files written by plugins/monitor-hooks. */
 export function readHookSessions(dir: string): Map<string, HookSession> {
   const out = new Map<string, HookSession>();
+  const metadataAt = new Map<string, number>();
   let names: string[];
   try {
     names = readdirSync(dir);
@@ -235,8 +236,11 @@ export function readHookSessions(dir: string): Map<string, HookSession> {
       result: null,
       endedAt: null,
     };
-    session.entrypoint ??= token(raw.entrypoint);
-    if (raw.cwd?.startsWith('/')) session.cwd ??= raw.cwd;
+    if (at >= (metadataAt.get(id) ?? 0)) {
+      session.entrypoint = token(raw.entrypoint);
+      if (raw.cwd?.startsWith('/')) session.cwd = raw.cwd;
+      metadataAt.set(id, at);
+    }
     if (match[2] === 'start') {
       session.startedAt = at;
       session.title = text(raw.title)?.slice(0, 200) ?? null;

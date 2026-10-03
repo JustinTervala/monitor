@@ -13,9 +13,15 @@ export async function readClaudeResponse(
   if (!id || !validCliSessionId(id) || !session.directory) return null;
   let assistantId: string | null = null;
   let completedAt: number | null = null;
-  if (session.externalId.startsWith('cli_')) {
+  if (session.externalId.startsWith('cli_') || session.completionSource === 'terminal') {
     const hook = readHookSessions(hooksDir).get(id);
-    if (!hook?.result || hook.result.error || hook.result.key !== session.attentionKey) return null;
+    if (
+      !hook?.result ||
+      hook.result.error ||
+      hook.result.key !== session.attentionKey ||
+      (hook.startedAt ?? 0) > hook.result.at
+    )
+      return null;
     completedAt = hook.result.at;
   } else {
     const record = readDesktopRecords(desktopDir).find((r) => r.sessionId === session.externalId);

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
@@ -9,6 +9,8 @@ import { readHookRecords } from '../src/providers/codex/hooks';
 import { canResumeInTerminal, resumeCommand } from '../src/shared/resume';
 import { parseTerminalProcesses, type TerminalProcess } from '../src/providers/terminal';
 import type { Session } from '../src/shared/types';
+import { MonitorService } from '../src/main/service';
+import { MonitorStore } from '../src/main/store';
 
 const id = '00000000-0000-4000-8000-000000000001';
 const next = '00000000-0000-4000-8000-000000000002';
@@ -115,6 +117,57 @@ test('PID reuse and switching tasks in the same CLI do not focus the wrong task'
   f.processes(new Map([[identity.pid, { ...identity, command: '/usr/bin/vim' }]]));
   await f.provider.refresh();
   assert.equal(f.session(next).terminalPid, null);
+});
+
+test('a failed catalog refresh disables terminal resume until observations recover', async (t) => {
+  const f = fixture(t);
+  f.write(id, Date.now() - 20, 'Stop', true);
+  f.processes(new Map());
+  const service = new MonitorService(
+    new MonitorStore(join(f.root, 'monitor.sqlite')),
+    [f.provider],
+    () => {},
+  );
+  try {
+    await service.start();
+    const current = () => service.snapshot().state.sessions[`codex:${id}`];
+    assert.equal(canResumeInTerminal(current()), true);
+    // The task is resumed outside Monitor, just before its catalog becomes unreadable.
+    f.write(id, Date.now());
+    f.processes(new Map([[identity.pid, { ...identity, command: '/opt/bin/codex' }]]));
+    const database = join(f.root, 'state_5.sqlite');
+    renameSync(database, `${database}.unavailable`);
+    await assert.rejects(service.terminalResumeCommand(`codex:${id}`), /still be active/);
+    assert.equal(current().terminalResumeAllowed, false);
+    f.processes(new Map());
+    await f.provider.refresh();
+    // Even a desktop snapshot must not reopen the action while catalog validation failed.
+    (f.provider as any).transport.emit('message', {
+      method: 'thread-stream-state-changed',
+      version: 11,
+      sourceClientId: 'fixture',
+      params: {
+        hostId: 'local',
+        conversationId: id,
+        change: {
+          type: 'snapshot',
+          revision: 1,
+          conversationState: { id, threadRuntimeStatus: { type: 'idle' }, hasUnreadTurn: false },
+        },
+      },
+    });
+    assert.equal(current().terminalResumeAllowed, false);
+    f.processes(new Map([[identity.pid, { ...identity, command: '/opt/bin/codex' }]]));
+    renameSync(`${database}.unavailable`, database);
+    await f.provider.refresh();
+    assert.equal(current().terminalPid, identity.pid);
+    await assert.rejects(service.terminalResumeCommand(`codex:${id}`), /still be active/);
+    f.write(id, Date.now(), 'Stop', true);
+    f.processes(new Map());
+    assert.match(await service.terminalResumeCommand(`codex:${id}`), /codex resume/);
+  } finally {
+    await service.stop();
+  }
 });
 
 test('the real companion writer binds its Codex ancestor, excludes headless processes, and ignores spoofed payload fields', (t) => {

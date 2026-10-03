@@ -25,6 +25,8 @@ export interface Session {
   evidence: 'live' | 'history' | 'unavailable';
   /** Stable result/request identity, not an observation timestamp. */
   attentionKey: string | null;
+  /** Claude hooks can own the completion while the task keeps its desktop identity. */
+  completionSource?: 'terminal';
   /** Actual turn activity, not a title edit, focus, or catalog refresh. */
   activityAt?: number;
   awaitingInput?: boolean;
@@ -79,6 +81,8 @@ export interface ProviderHealth {
   state: 'connecting' | 'live' | 'degraded' | 'offline';
   message: string;
   lastObservedAt: number | null;
+  /** Scope observation loss to these Monitor ids; omitted for a whole-provider disconnect. */
+  disconnectedSessionIds?: string[];
 }
 
 export interface Snapshot {

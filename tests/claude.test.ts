@@ -440,6 +440,247 @@ test('a desktop session resumed in a terminal stays one task and shows running',
   assert.equal(sessions[0].terminalPid, 21, 'Show in iTerm reaches the resumed process');
 });
 
+test('a resumed desktop task uses terminal results and approvals with desktop closed', async (t) => {
+  const f = fixture();
+  let running = true;
+  const provider = new ClaudeProvider({
+    desktopDir: f.desktop,
+    configDir: f.config,
+    hooksDir: f.hooks,
+    desktopRunning: async () => running,
+    processAlive: () => true,
+    pollMs: 60_000,
+  });
+  const notices: NotificationEvent[] = [];
+  const service = new MonitorService(
+    new MonitorStore(join(f.root, 'monitor.sqlite')),
+    [provider],
+    (notice) => notices.push(notice),
+  );
+  t.after(() => {
+    service.stop();
+    rmSync(f.root, { recursive: true });
+  });
+  const cli = A.slice(6);
+  f.record(A, { lastAssistantUuid: uuid(1), completedTurns: 1, lastFocusedAt: 3000 });
+  await service.start();
+  const group = service.snapshot().state.groups[0];
+  const current = () => service.snapshot().state.sessions[`claude:${A}`];
+  f.proc(21, {
+    entrypoint: 'cli',
+    kind: 'interactive',
+    sessionId: cli,
+    status: 'busy',
+    statusUpdatedAt: 4000,
+  });
+  await provider.refresh();
+  assert.equal(current().status, 'running');
+  running = false;
+  await provider.refresh();
+  assert.equal(current().status, 'running');
+  f.proc(21, {
+    entrypoint: 'cli',
+    kind: 'interactive',
+    sessionId: cli,
+    status: 'waiting',
+    waitingFor: 'permission prompt',
+    statusUpdatedAt: 4500,
+  });
+  await provider.refresh();
+  assert.equal(current().status, 'review');
+  assert.equal(current().awaitingInput, true);
+  assert.equal(current().attentionKey, 'waiting:4500');
+  assert.equal(notices.length, 1);
+  writeFileSync(join(f.org, `${A}.json`), '{partial');
+  await provider.refresh();
+  assert.equal(current().attentionKey, 'waiting:4500');
+  assert.equal(
+    Object.keys(service.snapshot().state.sessions).length,
+    1,
+    'missing desktop metadata must not duplicate the live terminal task',
+  );
+  f.record(A, { lastAssistantUuid: uuid(1), completedTurns: 1, lastFocusedAt: 3000 });
+  f.proc(21, {
+    entrypoint: 'cli',
+    kind: 'interactive',
+    sessionId: cli,
+    status: 'idle',
+    statusUpdatedAt: 5000,
+  });
+  f.hook(cli, 'result', { at: '5000', kind: 'stop', prompt: 'terminal-turn' });
+  await provider.refresh();
+  assert.equal(current().status, 'review');
+  assert.equal(current().attentionKey, 'result:terminal-turn');
+  assert.equal(current().activityAt, 5000);
+  assert.equal(current().openable, true);
+  assert.equal(current().title, 'Ship billing');
+  assert.equal(notices.length, 2);
+  running = true;
+  await provider.refresh();
+  assert.equal(
+    current().attentionKey,
+    'result:terminal-turn',
+    'a stale desktop receipt cannot acknowledge terminal work',
+  );
+  assert.equal(notices.length, 2);
+  assert.deepEqual(service.snapshot().state.groups, [{ ...group, inQueue: true }]);
+  rmSync(join(f.config, 'sessions', '21.json'));
+  f.hook(cli, 'end', { at: '5500' });
+  await provider.refresh();
+  assert.equal(current().attentionKey, 'result:terminal-turn');
+  assert.equal(current().status, 'read');
+  // New desktop execution restores the authoritative desktop state.
+  f.proc(22, { hostSessionId: A, status: 'busy', statusUpdatedAt: 6000 });
+  await provider.refresh();
+  assert.equal(current().status, 'running');
+  f.proc(22, { hostSessionId: A, status: 'idle', statusUpdatedAt: 7000 });
+  f.record(A, { lastAssistantUuid: uuid(2), completedTurns: 2, lastActivityAt: 7000 });
+  await provider.refresh();
+  assert.equal(current().attentionKey, 'result:2');
+});
+
+test('missing and unreadable tracked desktop records become unavailable without losing workstreams', async (t) => {
+  const f = fixture();
+  const provider = new ClaudeProvider({
+    desktopDir: f.desktop,
+    configDir: f.config,
+    hooksDir: f.hooks,
+    desktopRunning: async () => true,
+    processAlive: () => true,
+    pollMs: 60_000,
+  });
+  const notices: NotificationEvent[] = [];
+  const service = new MonitorService(
+    new MonitorStore(join(f.root, 'monitor.sqlite')),
+    [provider],
+    (notice) => notices.push(notice),
+  );
+  t.after(() => {
+    service.stop();
+    rmSync(f.root, { recursive: true });
+  });
+  f.record(A, {});
+  f.proc(42, { hostSessionId: A, status: 'busy' });
+  await service.start();
+  const group = service.snapshot().state.groups[0];
+  service.command({
+    type: 'rename',
+    groupId: group.id,
+    name: 'Preserved workstream',
+    projectOverride: 'Custom project',
+  });
+  service.command({ type: 'snooze', groupId: group.id, until: null });
+  const saved = service.snapshot().state.groups;
+  const file = join(f.org, `${A}.json`);
+  writeFileSync(file, '{partial');
+  await provider.refresh();
+  let task = service.snapshot().state.sessions[`claude:${A}`];
+  assert.equal(task.status, 'unknown');
+  assert.equal(task.evidence, 'unavailable');
+  assert.equal(task.attentionKey, null);
+  assert.equal(task.title, 'Ship billing');
+  assert.deepEqual(service.snapshot().state.groups, saved);
+  rmSync(f.desktop, { recursive: true });
+  await provider.refresh();
+  assert.equal(service.snapshot().state.sessions[`claude:${A}`].status, 'unknown');
+  mkdirSync(f.org, { recursive: true });
+  f.record(A, { lastAssistantUuid: uuid(2), completedTurns: 2, lastActivityAt: 7000 });
+  f.proc(42, { hostSessionId: A, status: 'idle', statusUpdatedAt: 7000 });
+  service.command({ type: 'unsnooze', groupId: group.id });
+  await provider.refresh();
+  task = service.snapshot().state.sessions[`claude:${A}`];
+  assert.equal(task.status, 'review');
+  assert.equal(task.attentionKey, 'result:2');
+  assert.equal(notices.length, 0, 'recovered results establish a new baseline');
+  assert.equal(service.snapshot().state.groups[0].name, 'Preserved workstream');
+});
+
+test('quitting desktop preserves a standalone terminal notification baseline', async (t) => {
+  const f = fixture();
+  let running = true;
+  const provider = new ClaudeProvider({
+    desktopDir: f.desktop,
+    configDir: f.config,
+    hooksDir: f.hooks,
+    desktopRunning: async () => running,
+    processAlive: () => true,
+    pollMs: 60_000,
+  });
+  const notices: NotificationEvent[] = [];
+  const service = new MonitorService(
+    new MonitorStore(join(f.root, 'monitor.sqlite')),
+    [provider],
+    (notice) => notices.push(notice),
+  );
+  t.after(() => {
+    service.stop();
+    rmSync(f.root, { recursive: true });
+  });
+  f.record(A, { lastAssistantUuid: uuid(1), completedTurns: 1 });
+  f.proc(20, {
+    entrypoint: 'cli',
+    kind: 'interactive',
+    sessionId: uuid(5),
+    status: 'busy',
+    statusUpdatedAt: 4000,
+  });
+  await service.start();
+  running = false;
+  await provider.refresh();
+  assert.equal(service.snapshot().state.sessions[`claude:cli_${uuid(5)}`].status, 'running');
+  f.proc(20, {
+    entrypoint: 'cli',
+    kind: 'interactive',
+    sessionId: uuid(5),
+    status: 'idle',
+    statusUpdatedAt: 5000,
+  });
+  f.hook(uuid(5), 'result', { at: '5000', prompt: 'terminal-turn', kind: 'stop' });
+  await provider.refresh();
+  assert.equal(notices.length, 1);
+  assert.equal(notices[0].sessionId, `claude:cli_${uuid(5)}`);
+  f.record(A, { lastAssistantUuid: uuid(2), completedTurns: 2, lastActivityAt: 6000 });
+  running = true;
+  await provider.refresh();
+  assert.equal(notices.length, 1, 'desktop reconnect remains quiet');
+});
+
+test('resuming from desktop to terminal uses the newest hook metadata and drops earlier results', async (t) => {
+  const f = fixture();
+  const provider = new ClaudeProvider({
+    desktopDir: f.desktop,
+    configDir: f.config,
+    hooksDir: f.hooks,
+    desktopRunning: async () => true,
+    processAlive: () => true,
+    pollMs: 60_000,
+  });
+  let sessions: Session[] = [];
+  t.after(() => {
+    provider.stop();
+    rmSync(f.root, { recursive: true });
+  });
+  const cli = A.slice(6);
+  f.record(A, { lastAssistantUuid: uuid(1), completedTurns: 1 });
+  f.hook(cli, 'result', { at: '3000', kind: 'stop', prompt: 'old', entrypoint: 'claude-desktop' });
+  f.proc(21, {
+    entrypoint: 'cli',
+    kind: 'interactive',
+    sessionId: cli,
+    status: 'idle',
+    statusUpdatedAt: 4000,
+  });
+  await provider.start({ sessions: (value) => (sessions = value), health: () => {} });
+  assert.equal(sessions[0].attentionKey, null, 'old desktop hooks are not terminal completions');
+  f.hook(cli, 'start', { at: '4000' });
+  assert.equal(readHookSessions(f.hooks).get(cli)?.entrypoint, 'cli');
+  await provider.refresh();
+  assert.equal(sessions.length, 1);
+  assert.equal(sessions[0].status, 'unknown');
+  assert.equal(sessions[0].attentionKey, null);
+  assert.equal(sessions[0].terminalPid, 21);
+});
+
 test('the plugin hook script writes only whitelisted fields the provider can read', (t) => {
   const f = fixture();
   t.after(() => rmSync(f.root, { recursive: true }));

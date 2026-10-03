@@ -48,7 +48,7 @@ export class ClaudeProvider implements SessionProvider {
   readonly hooksDir: string;
   private callbacks: ObserverCallbacks | null = null;
   private tracked = new Set<string>();
-  private connected: boolean | null = null;
+  private desktopRecords = new Map<string, DesktopRecord>();
   private lastObservedAt: number | null = null;
   private timer: NodeJS.Timeout | null = null;
   private debounce: NodeJS.Timeout | null = null;
@@ -128,6 +128,15 @@ export class ClaudeProvider implements SessionProvider {
           ? 'No Claude desktop Code sessions found'
           : `Could not read Claude desktop sessions: ${(error as Error).message}`;
     }
+    const present = new Set(records.map((record) => record.sessionId));
+    for (const record of records) this.desktopRecords.set(record.sessionId, record);
+    // Keep only whitelisted identity metadata for followed tasks. A missing record
+    // must publish unavailable state and must not create a duplicate CLI task.
+    for (const [id, record] of this.desktopRecords)
+      if (!present.has(id)) {
+        if (this.tracked.has(id)) records.push(record);
+        else this.desktopRecords.delete(id);
+      }
     const live = readLiveProcesses(this.registryDir, this.options.processAlive ?? processAlive);
     const hooks = readHookSessions(this.hooksDir);
     const now = Date.now();
@@ -136,11 +145,11 @@ export class ClaudeProvider implements SessionProvider {
       .map((record) =>
         sessionFromRecord(
           record,
-          // A desktop session resumed with `claude --resume` runs as a terminal process.
-          live.desktop.get(record.sessionId) ??
-            (record.cliSessionId ? live.terminal.get(record.cliSessionId) : undefined),
-          running,
+          live.desktop.get(record.sessionId),
+          running && present.has(record.sessionId),
           now,
+          record.cliSessionId ? hooks.get(record.cliSessionId) : undefined,
+          record.cliSessionId ? live.terminal.get(record.cliSessionId) : undefined,
         ),
       );
     // Terminal sessions: hook-reported or live CLI processes, plus any already followed.
@@ -160,6 +169,13 @@ export class ClaudeProvider implements SessionProvider {
       records.filter((r) => r.cliSessionId).map((r) => [r.cliSessionId!, r]),
     );
     for (const session of sessions) {
+      if (
+        validSessionId(session.externalId) &&
+        !present.has(session.externalId) &&
+        session.evidence === 'unavailable'
+      )
+        session.detail =
+          'Claude desktop record is missing or unreadable; waiting for current state';
       const cliId = session.resumeId;
       const desktop = cliId ? desktopByCli.get(cliId) : undefined;
       if (!cliId || !session.directory || desktop?.forkedFromSessionId || desktop?.lineageDetached)
@@ -189,23 +205,32 @@ export class ClaudeProvider implements SessionProvider {
         };
     }
     if (running || live.terminal.size) this.lastObservedAt = now;
-    // Offline health first so the service drops its baseline before the
-    // unavailable states; reconnect then re-baselines without replaying results.
-    if (!running && this.connected !== false)
-      this.health('offline', 'Claude desktop is not running');
-    this.callbacks?.sessions(sessions);
+    // Only tasks that actually lost observation need a quiet reconnect baseline.
+    // Independent terminal processes stay observable when the desktop quits.
+    const disconnected = sessions.filter((s) => s.evidence === 'unavailable').map((s) => s.id);
     const terminalNote = terminals ? ` · ${terminals} terminal` : '';
-    if (running && desktopProblem) this.health('degraded', desktopProblem + terminalNote);
-    else if (running) this.health('live', `Reading Claude desktop${terminalNote}`);
-    else if (terminals) this.health('degraded', `Claude desktop is not running${terminalNote}`);
-    this.connected = running;
+    if (running && desktopProblem)
+      this.health('degraded', desktopProblem + terminalNote, disconnected);
+    else if (running) this.health('live', `Reading Claude desktop${terminalNote}`, disconnected);
+    else
+      this.health(
+        terminals || live.terminal.size ? 'degraded' : 'offline',
+        `Claude desktop is not running${terminalNote}`,
+        disconnected,
+      );
+    this.callbacks?.sessions(sessions);
   }
-  private health(state: 'live' | 'degraded' | 'offline', message: string) {
+  private health(
+    state: 'live' | 'degraded' | 'offline',
+    message: string,
+    disconnectedSessionIds: string[],
+  ) {
     this.callbacks?.health({
       provider: this.id,
       state,
       message,
       lastObservedAt: this.lastObservedAt,
+      disconnectedSessionIds,
     });
   }
   track(externalIds: string[]) {

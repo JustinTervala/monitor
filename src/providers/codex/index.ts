@@ -41,6 +41,7 @@ export class CodexProvider implements SessionProvider {
   private terminalProcesses: Map<number, TerminalProcess> | null = new Map();
   private terminalOwners = new Map<number, string>();
   private refreshPromise: Promise<void> | null = null;
+  private catalogCurrent = false;
   private lineage = new LineageReader();
   constructor(
     readonly home = process.env.CODEX_HOME || join(homedir(), '.codex'),
@@ -121,7 +122,11 @@ export class CodexProvider implements SessionProvider {
         ? { pid: terminal.pid, tty: terminal.tty, startedAt: terminal.startedAt }
         : null,
       terminalResumeAllowed:
-        !!terminal && this.terminalProcesses !== null && !alive && !desktopBusy,
+        this.catalogCurrent &&
+        !!terminal &&
+        this.terminalProcesses !== null &&
+        !alive &&
+        !desktopBusy,
     };
     const event = record?.activity?.turnId ? record.activity : record?.completion;
     const turn = projection && latestTurn(projection);
@@ -182,6 +187,7 @@ export class CodexProvider implements SessionProvider {
         if (record.terminal) this.terminalOwners.set(record.terminal.pid, id);
       }
       const rows = readCatalog(this.home, this.tracked, this.lineage);
+      this.catalogCurrent = true;
       for (const row of rows) {
         const live = this.live.get(row.externalId);
         this.sessions.set(
@@ -192,6 +198,10 @@ export class CodexProvider implements SessionProvider {
       this.publish();
       this.reportHealth();
     } catch (error) {
+      this.catalogCurrent = false;
+      for (const [id, session] of this.sessions)
+        this.sessions.set(id, { ...session, terminalResumeAllowed: false });
+      this.publish();
       this.health('degraded', error instanceof Error ? error.message : String(error));
     }
   }

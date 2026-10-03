@@ -134,10 +134,23 @@ test('Claude terminal final answer must match the current successful hook and it
     attentionKey: 'result:turn3',
   });
   assert.equal(await readClaudeResponse(root, config, hooks, s), 'Done.');
+  const desktopIdentity = { ...s, externalId: 'local_test', completionSource: 'terminal' as const };
+  assert.equal(
+    await readClaudeResponse(root, config, hooks, desktopIdentity),
+    'Done.',
+    'a desktop-origin task reads the exact terminal completion lazily',
+  );
   assert.equal(
     await readClaudeResponse(root, config, hooks, { ...s, attentionKey: 'result:old' }),
     null,
   );
   writeFileSync(file, jsonl([{ ...response, timestamp: new Date(at + 3000).toISOString() }]));
   assert.equal(await readClaudeResponse(root, config, hooks, s), null);
+  writeFileSync(file, jsonl([response]));
+  writeFileSync(join(hooks, `${uuid}.start`), `v=1\nat=${at + 4000}\nentrypoint=cli\n`);
+  assert.equal(
+    await readClaudeResponse(root, config, hooks, desktopIdentity),
+    null,
+    'resuming invalidates an earlier completion',
+  );
 });
