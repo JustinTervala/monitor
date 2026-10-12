@@ -14,6 +14,12 @@ Use `CODEX_HOME` or `~/.codex`. Open the highest `state_N.sqlite` read-only with
 
 A catalog timestamp is not runtime evidence. Catalog-only tasks remain unavailable.
 
+## Sidebar pins
+
+Current Codex stores sidebar pins in `threads.thread_section_id`. Monitor compares it with the built-in Pinned section's fixed ID (`01984de2-8f74-7c91-a3b2-5c5e937cf318`) and carries only the derived `sourcePinned` boolean. The section's display name is not used. The older `is_pinned` column and `pinned-thread-ids` desktop state can remain stale after section migration, so neither is used. A missing section column leaves pin state unavailable without disrupting runtime observation. The existing one-second catalog refresh observes pin/unpin and section moves even while a task has live IPC state. Pins are display metadata and do not change Monitor's grouping, queue admission, saved priority, snoozes, or archives.
+
+The installed desktop's section identity and its current pinned task were verified read-only against the desktop's pin listing. Synthetic adapter and Electron fixtures verify pin/unpin refresh, grouped counts, and badges throughout the UI; they do not mutate real Codex pins.
+
 ## Fork ancestry
 
 The catalog also reads source creation timestamps and the first `session_meta` record from the catalog's rollout path. `forked_from_id`, or `history_base.thread_id` for shared history, supplies the parent; `parent_thread_id` is deliberately excluded because it describes spawned agents. The reader checks the metadata identity, validates the parent ID, bounds reads to 1 MiB, and caches only the reduced parent identifier for an immutable file prefix. Unreadable, partial, oversized, or invalid metadata leaves ancestry unavailable. Prompts, instructions, tool definitions, and transcript bodies are discarded and never persisted. No app-server process is started, task resumed, or source file modified. Exact fork turns are not inferred from creation timestamps or history ordinals.

@@ -13,6 +13,7 @@ import { displayDirectory } from './directory';
 import { GroupPicker } from './GroupPicker';
 import { HandoffSummary } from './HandoffSummary';
 import { ProviderIcon } from './ProviderIcon';
+import { PinBadge } from './PinBadge';
 
 const labels = {
   read: 'Read',
@@ -190,6 +191,7 @@ export function TaskView({
                 <ProviderIcon provider={session.provider} />
                 {session.provider === 'codex' ? 'Codex' : 'Claude'}
               </span>
+              <PinBadge sessions={[session]} />
               <span title={new Date(session.updatedAt).toLocaleString()}>
                 {age(session.updatedAt)}
               </span>
@@ -318,7 +320,10 @@ export function TaskView({
                         onClick={() => choose(node.id)}
                       >
                         <span className="fork-title">
-                          <strong>{task.title}</strong>
+                          <span className="task-title-line">
+                            <strong>{task.title}</strong>
+                            <PinBadge sessions={[task]} />
+                          </span>
                           <HandoffSummary state={state} session={task} />
                           <span className="fork-meta">
                             {taskGroup ? groupName(state, taskGroup) : 'No group'}
@@ -500,7 +505,10 @@ export function TaskView({
                 aria-pressed={member.id === sessionId}
                 onClick={() => choose(member.id)}
               >
-                <strong>{member.title}</strong>
+                <div className="task-title-line">
+                  <strong>{member.title}</strong>
+                  <PinBadge sessions={[member]} />
+                </div>
                 <HandoffSummary state={state} session={member} />
                 <span>
                   <span className={`status-dot ${member.status}`} aria-hidden="true" />

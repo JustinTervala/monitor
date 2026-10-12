@@ -25,7 +25,39 @@ test('catalog only reads source metadata and does not infer runtime from recency
     assert.equal(sessions[0].status, 'unknown');
     assert.equal(sessions[0].attentionKey, null);
     assert.equal(sessions[0].updatedAt, 10000);
+    assert.equal(sessions[0].sourcePinned, undefined);
     assert.deepEqual(readFileSync(join(home, 'state_5.sqlite')), before);
+  } finally {
+    rmSync(home, { recursive: true });
+  }
+});
+test('catalog observes current Codex section pins and ignores stale pin stores', () => {
+  const home = mkdtempSync('/tmp/monitor-pins-');
+  try {
+    catalog(home);
+    const db = new DatabaseSync(join(home, 'state_5.sqlite'));
+    db.exec(`ALTER TABLE threads ADD COLUMN thread_section_id TEXT;
+      ALTER TABLE threads ADD COLUMN is_pinned INTEGER DEFAULT 1;
+      CREATE TABLE thread_sections(id TEXT PRIMARY KEY,name TEXT);
+      INSERT INTO thread_sections VALUES('custom-section','Pinned');
+      UPDATE threads SET thread_section_id='01984de2-8f74-7c91-a3b2-5c5e937cf318',is_pinned=0 WHERE id='aaaaaa';`);
+    const globalPath = join(home, '.codex-global-state.json');
+    writeFileSync(globalPath, JSON.stringify({ 'pinned-thread-ids': ['aaaaaa'] }));
+    const before = readFileSync(join(home, 'state_5.sqlite'));
+    assert.equal(readCatalog(home)[0].sourcePinned, true);
+    assert.deepEqual(readFileSync(join(home, 'state_5.sqlite')), before);
+    db.exec("UPDATE threads SET thread_section_id=NULL,is_pinned=1 WHERE id='aaaaaa'");
+    assert.equal(readCatalog(home)[0].sourcePinned, false, 'unpin ignores stale legacy pins');
+    db.exec("UPDATE threads SET thread_section_id='custom-section' WHERE id='aaaaaa'");
+    assert.equal(readCatalog(home)[0].sourcePinned, false, 'a custom Pinned section is not a pin');
+    db.exec(
+      "UPDATE threads SET thread_section_id='01984de2-8f74-7c91-a3b2-5c5e937cf318' WHERE id='aaaaaa'",
+    );
+    assert.equal(readCatalog(home)[0].sourcePinned, true, 're-pinning is observed on refresh');
+    assert.deepEqual(JSON.parse(readFileSync(globalPath, 'utf8')), {
+      'pinned-thread-ids': ['aaaaaa'],
+    });
+    db.close();
   } finally {
     rmSync(home, { recursive: true });
   }
@@ -125,6 +157,17 @@ test('desktop observer follows, applies ordered patches, resyncs gaps and never 
     },
   });
   await wait(() => sessions[0]?.status === 'running');
+  const pinCatalog = new DatabaseSync(join(home, 'state_5.sqlite'));
+  pinCatalog.exec(`ALTER TABLE threads ADD COLUMN thread_section_id TEXT;
+    UPDATE threads SET thread_section_id='01984de2-8f74-7c91-a3b2-5c5e937cf318' WHERE id='aaaaaa';`);
+  await provider.refresh();
+  assert.equal(sessions[0].sourcePinned, true);
+  assert.equal(sessions[0].status, 'running', 'pin refresh preserves live runtime state');
+  pinCatalog.exec("UPDATE threads SET thread_section_id=NULL WHERE id='aaaaaa'");
+  pinCatalog.close();
+  await provider.refresh();
+  assert.equal(sessions[0].sourcePinned, false);
+  assert.equal(sessions[0].status, 'running');
   mkdirSync(join(home, 'hooks'), { mode: 0o700 });
   const hookFile = join(home, 'hooks', 'aaaaaa.json');
   writeFileSync(

@@ -13,7 +13,7 @@ const root = mkdtempSync('/tmp/monitor-ui-'),
 mkdirSync(join(home, 'ipc'), { recursive: true, mode: 0o700 });
 const db = new DatabaseSync(join(home, 'state_5.sqlite'));
 db.exec(
-  'CREATE TABLE threads(id TEXT PRIMARY KEY,title TEXT,cwd TEXT,source TEXT,archived INTEGER,updated_at INTEGER)',
+  'CREATE TABLE threads(id TEXT PRIMARY KEY,title TEXT,cwd TEXT,source TEXT,archived INTEGER,updated_at INTEGER,thread_section_id TEXT)',
 );
 const now = Math.floor(Date.now() / 1000);
 for (const [id, title, cwd, updated] of [
@@ -21,7 +21,11 @@ for (const [id, title, cwd, updated] of [
   ['bbbbbb', 'Review the billing changes', '/work/payments', now - 172800],
   ['cccccc', 'Investigate streaming playback', '/work/media', now - 518400],
 ])
-  db.prepare("INSERT INTO threads VALUES(?,?,?,'cli',0,?)").run(id, title, cwd, updated);
+  db.prepare(
+    "INSERT INTO threads(id,title,cwd,source,archived,updated_at) VALUES(?,?,?,'cli',0,?)",
+  ).run(id, title, cwd, updated);
+const pinnedSection = '01984de2-8f74-7c91-a3b2-5c5e937cf318';
+db.prepare("UPDATE threads SET thread_section_id=? WHERE id='aaaaaa'").run(pinnedSection);
 db.close();
 const clients = new Set();
 function frame(value) {
@@ -190,6 +194,12 @@ try {
   );
   assert.equal(await page.getByRole('button', { name: /Add tasks|Browse tasks/ }).count(), 0);
   assert.equal(await page.getByRole('button', { name: /^View fork family:/ }).count(), 0);
+  const pinnedRow = page.getByTestId('group-row').filter({ hasText: 'Build the billing rollout' });
+  assert.equal(
+    await pinnedRow.getByRole('img', { name: 'Pinned in Codex', exact: true }).count(),
+    1,
+  );
+  assert.equal(await page.getByRole('img', { name: 'Pinned in Codex', exact: true }).count(), 1);
   // Queue shortcuts navigate directly without selecting a row or opening details.
   await app.evaluate(({ shell }) => {
     globalThis.monitorOpened = [];
@@ -224,6 +234,27 @@ try {
   await initialTaskView
     .getByRole('heading', { name: 'Build the billing rollout', exact: true })
     .waitFor();
+  assert.equal(
+    await initialTaskView.getByRole('img', { name: 'Pinned in Codex', exact: true }).count(),
+    1,
+  );
+  await page.waitForFunction(
+    () => getComputedStyle(document.querySelector('.task-view')).opacity === '1',
+  );
+  await page.screenshot({ path: '.runtime/pinned-task-smoke.png' });
+  const groupsBeforePins = (await page.evaluate(() => window.monitor.snapshot())).state.groups;
+  const pinDb = new DatabaseSync(join(home, 'state_5.sqlite'));
+  pinDb.exec("UPDATE threads SET thread_section_id=NULL WHERE id='aaaaaa'");
+  await initialTaskView
+    .getByRole('img', { name: 'Pinned in Codex', exact: true })
+    .waitFor({ state: 'hidden' });
+  pinDb.prepare("UPDATE threads SET thread_section_id=? WHERE id='aaaaaa'").run(pinnedSection);
+  await initialTaskView.getByRole('img', { name: 'Pinned in Codex', exact: true }).waitFor();
+  assert.deepEqual(
+    (await page.evaluate(() => window.monitor.snapshot())).state.groups,
+    groupsBeforePins,
+  );
+  pinDb.close();
   assert.equal(
     await initialTaskView.getByRole('region', { name: 'Fork family', exact: true }).count(),
     0,
@@ -272,6 +303,23 @@ try {
   );
   assert.equal(await page.getByRole('dialog').count(), 0);
   assert.equal(await page.getByTestId('session-card').count(), 2);
+  assert.equal(
+    await page
+      .getByTestId('session-card')
+      .getByRole('img', { name: 'Pinned in Codex', exact: true })
+      .count(),
+    1,
+  );
+  const groupPins = new DatabaseSync(join(home, 'state_5.sqlite'));
+  groupPins.prepare("UPDATE threads SET thread_section_id=? WHERE id='bbbbbb'").run(pinnedSection);
+  await target.getByRole('img', { name: '2 conversations pinned in Codex', exact: true }).waitFor();
+  await page.waitForFunction(
+    () => document.querySelectorAll('.session-card .pin-badge').length === 2,
+  );
+  await page.screenshot({ path: '.runtime/pinned-group-smoke.png' });
+  groupPins.exec("UPDATE threads SET thread_section_id=NULL WHERE id='bbbbbb'");
+  await target.getByRole('img', { name: 'Pinned in Codex', exact: true }).waitFor();
+  groupPins.close();
   await page.getByRole('button', { name: 'Close details', exact: true }).click();
   const priorityBeforeSearch = (await page.evaluate(() => window.monitor.snapshot())).state.groups;
   await page.getByRole('textbox', { name: 'Filter workstreams' }).fill('paymnts billign');
@@ -352,7 +400,7 @@ try {
   const updatedCatalog = new DatabaseSync(join(home, 'state_5.sqlite'));
   updatedCatalog
     .prepare(
-      "INSERT INTO threads VALUES('dddddd','A newly created task','/work/payments','cli',0,?)",
+      "INSERT INTO threads(id,title,cwd,source,archived,updated_at) VALUES('dddddd','A newly created task','/work/payments','cli',0,?)",
     )
     .run(now);
   const sourceBeforeArchive = updatedCatalog.prepare('SELECT * FROM threads ORDER BY id').all();
@@ -428,6 +476,14 @@ try {
   await page.getByRole('button', { name: /^Archived / }).click();
   await page.getByRole('heading', { name: 'Archived.', exact: true }).waitFor();
   assert.equal(await page.getByTestId('archive-project').count(), 2);
+  assert.equal(
+    await page
+      .getByTestId('archive-row')
+      .filter({ hasText: 'Billing rollout' })
+      .getByRole('img', { name: 'Pinned in Codex', exact: true })
+      .count(),
+    1,
+  );
   const archiveNames = () =>
     page
       .getByTestId('archive-row')
@@ -553,7 +609,11 @@ try {
   const hookPath = join(env.MONITOR_CODEX_HOOKS_DIR, `${cliId}.json`);
   writeFileSync(hookPath, JSON.stringify(cliRecord), { mode: 0o600 });
   const cliDb = new DatabaseSync(join(home, 'state_5.sqlite'));
-  cliDb.prepare("INSERT INTO threads VALUES(?,'CLI task','/work/cli','cli',0,?)").run(cliId, now);
+  cliDb
+    .prepare(
+      "INSERT INTO threads(id,title,cwd,source,archived,updated_at) VALUES(?,'CLI task','/work/cli','cli',0,?)",
+    )
+    .run(cliId, now);
   cliDb.close();
   await reopened.evaluate(() => window.monitor.refresh());
   const cliRow = reopened.getByTestId('group-row').filter({ hasText: 'CLI task' });
@@ -596,7 +656,9 @@ try {
   const oldCatalog = new DatabaseSync(join(home, 'state_5.sqlite'));
   // Load the fixture atomically while the source observer is polling it.
   oldCatalog.exec('PRAGMA busy_timeout=1000; BEGIN IMMEDIATE;');
-  const addOld = oldCatalog.prepare("INSERT INTO threads VALUES(?,?,?,'cli',0,?)");
+  const addOld = oldCatalog.prepare(
+    "INSERT INTO threads(id,title,cwd,source,archived,updated_at) VALUES(?,?,?,'cli',0,?)",
+  );
   for (let i = 0; i < 260; i++)
     addOld.run(
       `history-${String(i).padStart(3, '0')}`,
@@ -625,6 +687,15 @@ try {
     0,
   );
   await reopened.getByRole('button', { name: /^Library / }).click();
+  await reopened.getByRole('textbox', { name: 'Filter workstreams' }).fill('Billing rollout');
+  assert.equal(
+    await reopened
+      .getByTestId('library-row')
+      .getByRole('img', { name: 'Pinned in Codex', exact: true })
+      .count(),
+    1,
+  );
+  await reopened.getByRole('textbox', { name: 'Filter workstreams' }).fill('');
   const history = reopened.getByTestId('library-project').filter({ hasText: '/work/history' });
   await history.waitFor();
   assert.equal(await history.getByTestId('library-row').count(), 20);
@@ -852,6 +923,7 @@ try {
         path,
       );
   }
+  forkDb.prepare("UPDATE threads SET thread_section_id=? WHERE id='fork-cache'").run(pinnedSection);
   forkDb.close();
   await afterArchiveRestart.evaluate(() => window.monitor.refresh());
   await afterArchiveRestart.waitForFunction(
@@ -923,6 +995,13 @@ try {
   assert.equal(await shortcutView.getByTestId('fork-row').count(), 8);
   assert.equal(
     await shortcutView
+      .getByTestId('fork-row')
+      .getByRole('img', { name: 'Pinned in Codex', exact: true })
+      .count(),
+    1,
+  );
+  assert.equal(
+    await shortcutView
       .getByRole('button', { name: 'Fork family 8', exact: true })
       .getAttribute('aria-pressed'),
     'true',
@@ -960,6 +1039,10 @@ try {
     .waitFor();
   const groupTasks = taskView.getByRole('region', { name: 'Tasks in this group' });
   assert.equal(await groupTasks.getByRole('button', { name: /^View task:/ }).count(), 3);
+  assert.equal(
+    await groupTasks.getByRole('img', { name: 'Pinned in Codex', exact: true }).count(),
+    1,
+  );
   await groupTasks
     .getByRole('button', { name: 'View task: Benchmark alternative', exact: true })
     .click();
@@ -1348,7 +1431,7 @@ try {
   ]).finally(() => clearTimeout(quitTimeout));
   app = undefined;
   console.log(
-    'Electron smoke passed: button press/release, reduced motion, dialog entrance, graceful shutdown, lazy handoff summaries, exact final-response reads, ephemeral Luna runner, cache privacy, archive deletion without replay, static task group names, recent/search group picker, cancel/focus return, keyboard reassignment and persistence, conditional fork-family shortcuts, details-first navigation, sibling tasks, breadcrumbs, focus/collapse/expansion, missing parents, responsive layout, source metadata privacy, search, source archives, Library pagination, CLI actions, grouping, priority, and notifications.',
+    'Electron smoke passed: Codex pin badges, live pin/unpin refresh, grouped pin counts, button press/release, reduced motion, dialog entrance, graceful shutdown, lazy handoff summaries, exact final-response reads, ephemeral Luna runner, cache privacy, archive deletion without replay, static task group names, recent/search group picker, cancel/focus return, keyboard reassignment and persistence, conditional fork-family shortcuts, details-first navigation, sibling tasks, breadcrumbs, focus/collapse/expansion, missing parents, responsive layout, source metadata privacy, search, source archives, Library pagination, CLI actions, grouping, priority, and notifications.',
   );
 } finally {
   await app?.close();

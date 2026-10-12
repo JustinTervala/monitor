@@ -11,6 +11,7 @@ import type { MonitorState, TaskGroup } from '../shared/types';
 import { RowProviders } from './ProviderIcon';
 import { displayDirectory } from './directory';
 import { HandoffSummary } from './HandoffSummary';
+import { PinBadge } from './PinBadge';
 
 export function ArchiveIcon() {
   return (
@@ -180,6 +181,7 @@ export function LibraryPage({
                           {sessions.length} {sessions.length === 1 ? 'task' : 'tasks'}
                         </span>
                       </span>
+                      <PinBadge sessions={sessions} />
                       <time
                         className="activity-date"
                         dateTime={updatedAt ? new Date(updatedAt).toISOString() : undefined}

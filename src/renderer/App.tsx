@@ -18,6 +18,7 @@ import { displayDirectory } from './directory';
 import { createSearchMatcher } from './search';
 import { canResumeInTerminal, resumeCommand } from '../shared/resume';
 import { ForkIcon, TaskView } from './TaskView';
+import { PinBadge } from './PinBadge';
 import { HandoffSummary } from './HandoffSummary';
 import { forkRelatedIds } from '../shared/forks';
 
@@ -364,6 +365,7 @@ export function App() {
               ) && <span className="stale-label"> · Status unavailable</span>}
             </span>
           </span>
+          <PinBadge sessions={sessions} />
           <span className="project-tag">{projectTag(state, group)}</span>
           <span className="task-count" title={`${sessions.length} tasks`}>
             {sessions.length}
@@ -711,6 +713,7 @@ export function App() {
                       {session.status === 'unknown' && displayStatus(state, session) !== 'unknown'
                         ? `Last seen ${statusLabel[displayStatus(state, session)].toLowerCase()}`
                         : statusLabel[session.status]}
+                      <PinBadge sessions={[session]} />
                       <span className="provider-name">
                         <ProviderIcon provider={session.provider} />
                         {session.provider}

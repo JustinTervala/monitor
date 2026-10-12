@@ -4,6 +4,9 @@ import { join } from 'node:path';
 import type { Session } from '../../shared/types';
 import { LineageReader } from '../lineage';
 
+// Match Codex's built-in Pinned section by identity, not a section's display name.
+const PINNED_SECTION_ID = '01984de2-8f74-7c91-a3b2-5c5e937cf318';
+
 export const validThreadId = (id: string) => /^[a-zA-Z0-9][a-zA-Z0-9_-]{5,127}$/.test(id);
 export function findStateDatabase(home: string): string {
   const names = readdirSync(home).filter((name) => /^state_\d+\.sqlite$/.test(name));
@@ -36,9 +39,14 @@ export function readCatalog(
       'source',
       'archived',
       'updated_at',
-      ...['name', 'updated_at_ms', 'created_at', 'created_at_ms', 'rollout_path'].filter((c) =>
-        columns.has(c),
-      ),
+      ...[
+        'name',
+        'updated_at_ms',
+        'created_at',
+        'created_at_ms',
+        'rollout_path',
+        'thread_section_id',
+      ].filter((c) => columns.has(c)),
     ].join(', ');
     const rows = db
       .prepare(
@@ -90,6 +98,9 @@ export function readCatalog(
           evidence: 'unavailable',
           attentionKey: null,
           archived: Boolean(row.archived),
+          sourcePinned: columns.has('thread_section_id')
+            ? row.thread_section_id === PINNED_SECTION_ID
+            : undefined,
         };
       });
   } finally {

@@ -32,6 +32,8 @@ export interface Session {
   awaitingInput?: boolean;
   /** Source-owned flag. Codex-archived tasks are hidden throughout Monitor. */
   archived: boolean;
+  /** Source-owned sidebar pin. Missing means the source does not expose it. */
+  sourcePinned?: boolean;
   /** false when the source app has no exact-session route (e.g. a terminal session). */
   openable?: boolean;
   /** Native CLI session id; never a command string. */
